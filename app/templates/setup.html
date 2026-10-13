@@ -25,7 +25,7 @@
     <tbody>
     {% for m in materials %}
       <tr><td>{% if can("setup.write") %}<a class="rowlink" href="/setup/materials/{{ m.id }}">{{ m.name }}</a>{% else %}{{ m.name }}{% endif %}{% if m.notes %}<div class="muted small">{{ m.notes }}</div>{% endif %}</td>
-        <td>{{ m.category }}</td><td>{{ m.supplier or "—" }}</td><td class="num">{{ m.parameters|selectattr("active")|list|length }}</td>
+        <td>{{ m.category }}</td><td>{{ m.supplier or "—" }}</td><td class="num">{{ m.parameters|selectattr("active")|list|length }}{% if can("setup.write") and m.category in ["Coarse aggregate", "Fine aggregate"] %}<div><a class="small" href="/setup/materials/{{ m.id }}/is383">IS 383 set</a></div>{% endif %}</td>
         <td>{% if m.active %}<span class="chip pass">Active</span>{% else %}<span class="chip info">Inactive</span>{% endif %}</td></tr>
     {% else %}
       <tr><td colspan="5" class="empty"><strong>No materials yet</strong>Add each material you receive: each cement, SCM, aggregate fraction, coating material and admixture.</td></tr>
@@ -39,17 +39,17 @@
   <div class="panel-head"><h2>Test parameters and limits</h2>{% if can("setup.write") and materials %}<a class="btn" href="/setup/parameters/new">Add parameter</a>{% endif %}</div>
   <div class="tablewrap">
   <table class="data">
-    <thead><tr><th>Material</th><th>Parameter</th><th>Limit</th><th>Method / reference</th><th>Status</th></tr></thead>
+    <thead><tr><th>Material</th><th>Parameter</th><th>Limit</th><th>Method / reference</th><th>Frequency</th><th>Status</th></tr></thead>
     <tbody>
     {% set ns = namespace(any=false) %}
     {% for m in materials %}{% for p in m.parameters %}{% set ns.any = true %}
       <tr><td>{{ m.name }}</td>
         <td>{% if can("setup.write") %}<a class="rowlink" href="/setup/parameters/{{ p.id }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}</td>
-        <td class="mono nowrap">{{ limit_text(p.min_value, p.max_value, p.unit) }}</td><td>{{ p.method or "—" }}</td>
+        <td class="mono nowrap">{{ limit_display(p.min_value, p.max_value, p.unit, p.value_type) }}</td><td class="small">{{ p.method or "—" }}</td><td class="small">{{ p.frequency or "Every lot" }}</td>
         <td>{% if p.active %}<span class="chip pass">Active</span>{% else %}<span class="chip info">Inactive</span>{% endif %}</td></tr>
     {% endfor %}{% endfor %}
     {% if not ns.any %}
-      <tr><td colspan="5" class="empty"><strong>No test parameters yet</strong>Add each test you run on a material with the minimum and/or maximum from your specification.</td></tr>
+      <tr><td colspan="6" class="empty"><strong>No test parameters yet</strong>Add each test you run on a material with the minimum and/or maximum from your specification, or open a coarse or fine aggregate material and apply the IS 383 test set.</td></tr>
     {% endif %}
     </tbody>
   </table>

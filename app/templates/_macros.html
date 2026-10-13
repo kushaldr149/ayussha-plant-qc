@@ -1,5 +1,5 @@
 {% macro res_chip(status) -%}
-{%- set cls = {"pass": "pass", "fail": "fail", "incomplete": "hold", "missing": "info", "nolimit": "info"} -%}
+{%- set cls = {"pass": "pass", "fail": "fail", "incomplete": "hold", "missing": "info", "nolimit": "info", "skipped": "info"} -%}
 <span class="chip {{ cls.get(status, 'info') }}">{{ STATUS.get(status, status) }}</span>
 {%- endmacro %}
 

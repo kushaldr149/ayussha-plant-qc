@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}IS 383 test set · {{ m.name }}{% endblock %}
+{% block content %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/setup/materials/{{ m.id }}">{{ m.name }}</a></p>
+<h1>Apply IS 383 physical test set</h1>
+<p class="muted">Adds the physical tests for {{ "fine" if o.fine else "coarse" }} aggregate with the IS 2386 method, the IS 383:2016 clause and the limit that applies to the options below. Parameters with the same name are updated; others are added. Past tests keep the limits they were recorded with.</p></div></div>
+
+<form class="panel stack" method="get" action="/setup/materials/{{ m.id }}/is383" style="max-width:900px">
+  <input type="hidden" name="preview" value="1">
+  <div class="fgrid">
+    {% if o.fine %}
+    <label class="f"><span>Type of fine aggregate</span><select name="source" id="i_source">{% for s in o.fine_sources %}<option {% if q.get('source') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Grading zone to check against (IS 383 Table 9)</span><select name="zone" id="i_zone">{% for z in o.zones %}<option {% if q.get('zone', 'Zone II') == z %}selected{% endif %}>{{ z }}</option>{% endfor %}</select>
+      <span class="hint">Every test also shows which zones the grading actually falls in.</span></label>
+    {% else %}
+    <label class="f"><span>Type of coarse aggregate</span><select name="source" id="i_source">{% for s in o.coarse_sources %}<option {% if q.get('source') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Nominal size and grading (IS 383 Table 7)</span><select name="grading" id="i_grading">{% for g in o.gradings %}<option {% if q.get('grading', 'Graded 20 mm') == g %}selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Concrete use (IS 383 cl. 5.4)</span><select name="use" id="i_use">{% for k, label in o.uses.items() %}<option value="{{ k }}" {% if q.get('use', 'other') == k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label class="check"><input type="checkbox" name="m65" id="i_m65" {% if q.get('m65') == 'on' %}checked{% endif %}> Concrete grade M65 and above (crushing and impact value ≤ 22 %)</label>
+    {% endif %}
+    <label class="check"><input type="checkbox" name="frost" id="i_frost" {% if q.get('frost') == 'on' %}checked{% endif %}> Concrete exposed to frost (adds soundness tests, cl. 5.5.1)</label>
+  </div>
+  <div class="actions"><a class="btn" href="/setup/materials/{{ m.id }}">Cancel</a><button class="btn primary" type="submit">Preview test set</button></div>
+</form>
+
+{% if preview %}
+<form method="post" action="/setup/materials/{{ m.id }}/is383" class="stack" style="display:grid;gap:14px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {% for k in ["source", "grading", "zone", "use", "m65", "frost"] %}{% if q.get(k) %}<input type="hidden" name="{{ k }}" value="{{ q.get(k) }}">{% endif %}{% endfor %}
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Group</th><th>Parameter</th><th>Limit</th><th>Method · IS 383 reference</th><th>Frequency</th><th>Worksheet</th><th></th></tr></thead>
+    <tbody>
+    {% for it in preview %}
+      <tr><td class="muted">{{ it.group }}</td><td>{{ it.name }}{% if it.note %}<div class="muted small">{{ it.note }}</div>{% endif %}</td>
+        <td class="mono nowrap">{% if it.value_type == "passfail" %}Pass required{% else %}{{ limit_text(it.min, it.max, it.unit) }}{% endif %}</td>
+        <td class="small">{{ it.method_text or "—" }}</td><td class="small">{{ it.frequency }}</td>
+        <td class="small">{{ "Yes" if it.calc else "—" }}</td>
+        <td>{% if it.name.lower() in existing %}<span class="chip hold">Updates existing</span>{% else %}<span class="chip pass">New</span>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+  <label class="check"><input type="checkbox" name="deactivate_others" id="i_deact"> Mark this material's other parameters inactive</label>
+  <div class="alert">Limits are from the base text of IS 383:2016 (Third Revision). BIS lists two amendments to it, which were not available when this test set was prepared; check them against your copy. Frequencies are the BIS product manual levels of control for IS 383, which the manual calls recommendatory. Every value can be changed afterwards in Setup.</div>
+  <div class="actions"><button class="btn primary" type="submit">Apply {{ preview|length }} parameters to {{ m.name }}</button></div>
+</form>
+{% endif %}
+
+<div class="panel">
+  <h2>Sources</h2>
+  <ul class="small" style="margin:8px 0 0;padding-left:18px">{% for label, url in o.sources_list %}<li><a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a></li>{% endfor %}</ul>
+</div>
+{% endblock %}

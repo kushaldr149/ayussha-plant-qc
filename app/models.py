@@ -95,7 +95,7 @@ class Material(Base):
     reorder_level: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     parameters: Mapped[list["QCParameter"]] = relationship(
-        back_populates="material", order_by="QCParameter.sort_order, QCParameter.name"
+        back_populates="material", order_by="QCParameter.sort_order, QCParameter.id"
     )
 
 
@@ -110,8 +110,19 @@ class QCParameter(Base):
     method: Mapped[str] = mapped_column(String(240), default="")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Added with the IS 383 test sets (nullable so existing databases upgrade in place).
+    group_name: Mapped[str | None] = mapped_column(String(60), nullable=True, default="")
+    frequency: Mapped[str | None] = mapped_column(String(30), nullable=True, default="Every lot")
+    calc: Mapped[str | None] = mapped_column(String(30), nullable=True, default="")
+    value_type: Mapped[str | None] = mapped_column(String(20), nullable=True, default="number")
+    sieve_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True, default="")
 
     material: Mapped[Material] = relationship(back_populates="parameters")
+
+    @property
+    def periodic(self) -> bool:
+        return (self.frequency or "Every lot") != "Every lot"
     __table_args__ = (UniqueConstraint("material_id", "name", name="uq_param_material_name"),)
 
 
@@ -154,7 +165,11 @@ class QCResult(Base):
     max_value: Mapped[float | None] = mapped_column(Float, nullable=True)
     method: Mapped[str] = mapped_column(String(240), default="")
     value: Mapped[float | None] = mapped_column(Float, nullable=True)
-    status: Mapped[str] = mapped_column(String(20))  # pass / fail / missing / nolimit
+    status: Mapped[str] = mapped_column(String(20))  # pass / fail / missing / nolimit / skipped
+    group_name: Mapped[str | None] = mapped_column(String(60), nullable=True, default="")
+    frequency: Mapped[str | None] = mapped_column(String(30), nullable=True, default="Every lot")
+    value_type: Mapped[str | None] = mapped_column(String(20), nullable=True, default="number")
+    workings: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON of worksheet inputs and results
 
     test: Mapped[QCTest] = relationship(back_populates="results")
 

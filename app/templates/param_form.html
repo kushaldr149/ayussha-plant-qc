@@ -16,6 +16,15 @@
     <label class="f"><span>Maximum</span><input name="max_value" id="t_max" inputmode="decimal" class="mono" value="{{ v.get('max_value', p.max_value if p and p.max_value is not none else '') }}"></label>
     <label class="f"><span>Display order</span><input name="sort_order" id="t_order" inputmode="numeric" value="{{ v.get('sort_order', p.sort_order if p else 0) }}"></label>
     <label class="f wide"><span>Method / standard reference</span><input name="method" id="t_method" value="{{ v.get('method', p.method if p else '') }}" placeholder="The standard and clause your limit comes from"></label>
+    <label class="f"><span>Group</span><input name="group_name" id="t_group" list="t_groups" value="{{ v.get('group_name', p.group_name if p and p.group_name else '') }}"><datalist id="t_groups">{% for g in groups %}<option value="{{ g }}">{% endfor %}</datalist></label>
+    {% set fr = v.get('frequency', (p.frequency if p and p.frequency else 'Every lot')) %}
+    <label class="f"><span>Frequency</span><select name="frequency" id="t_freq">{% for f in frequencies %}<option {% if f == fr %}selected{% endif %}>{{ f }}</option>{% endfor %}</select><span class="hint">Tests other than "Every lot" left empty are shown as not tested and do not make the lot incomplete.</span></label>
+    {% set vt = v.get('value_type', (p.value_type if p and p.value_type else 'number')) %}
+    <label class="f"><span>Result type</span><select name="value_type" id="t_type"><option value="number" {% if vt == 'number' %}selected{% endif %}>Number checked against limits</option><option value="passfail" {% if vt == 'passfail' %}selected{% endif %}>Pass / fail</option></select></label>
+    {% set ck = v.get('calc', (p.calc if p and p.calc else '')) %}
+    <label class="f"><span>Calculation worksheet</span><select name="calc" id="t_calc">{% for k, label in calcs %}<option value="{{ k }}" {% if k == ck %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Sieve size, mm (sieve analysis only)</span><input name="sieve_mm" id="t_sieve" inputmode="decimal" class="mono" value="{{ v.get('sieve_mm', p.sieve_mm if p and p.sieve_mm is not none else '') }}"><span class="hint">For 600 µm enter 0.6.</span></label>
+    <label class="f wide"><span>Note shown with the test</span><textarea name="note" id="t_note" rows="2">{{ v.get('note', p.note if p and p.note else '') }}</textarea></label>
     {% if p %}<label class="check"><input type="checkbox" name="active" id="t_active" {% if p.active %}checked{% endif %}> Active (inactive parameters are not asked for in new tests)</label>{% endif %}
   </div>
   <div class="actions"><a class="btn" href="/setup#parameters">Cancel</a><button class="btn primary" type="submit">Save parameter</button></div>

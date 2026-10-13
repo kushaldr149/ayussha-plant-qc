@@ -34,17 +34,39 @@
     {% endif %}
   </div>
 </div>
-<div class="tablewrap">
-<table class="data">
-  <thead><tr><th>Parameter</th><th>Method / reference</th><th>Limit at test time</th><th class="num">Value</th><th>Result</th></tr></thead>
-  <tbody>
-  {% for r in t.results %}
-    <tr><td>{{ r.name }}</td><td class="muted">{{ r.method or "—" }}</td><td class="mono nowrap">{{ limit_text(r.min_value, r.max_value, r.unit) }}</td>
-      <td class="num mono">{% if r.value is not none %}{{ r.value|num(4) }} {{ r.unit }}{% else %}—{% endif %}</td><td>{{ res_chip(r.status) }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+{% for gname, rows in groups %}
+<div class="panel">
+  {% if groups|length > 1 or gname != "Tests" %}<div class="panel-head" style="margin-bottom:8px"><h2>{{ gname }}</h2></div>{% endif %}
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Parameter</th><th>Method / reference</th><th>Limit at test time</th><th class="num">Value</th><th>Result</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td>{{ r.name }}{% if r.frequency and r.frequency != "Every lot" %} <span class="muted small">({{ r.frequency }})</span>{% endif %}
+          {% if work.get(r.id) %}{% set w = work[r.id] %}<details class="work small"><summary>Workings</summary>
+            <div class="muted">{{ w.title }}</div>
+            {% if w.calc == "sieve" %}
+            <div class="mono">Total mass {{ w.inputs.get("total") }} g{% for k, val in w.inputs.items() if k not in ("total", "pan") %}
+Retained on {{ k }} mm: {{ val }} g{% endfor %}{% if w.inputs.get("pan") not in (none, "") %}
+Pan: {{ w.inputs.get("pan") }} g{% endif %}{% if w.results and w.results.fm is not none %}
+Fineness modulus = {{ w.results.fm }}{% endif %}</div>
+            {% else %}
+            <div class="mono">{% for k, val in w.inputs.items() %}{{ k }} = {{ val }}{% if w.labels.get(k) %} ({{ w.labels[k] }}){% endif %}
+{% endfor %}{% for f in w.formulas %}{{ f }}
+{% endfor %}</div>
+            {% endif %}
+          </details>{% endif %}</td>
+        <td class="muted small">{{ r.method or "—" }}</td>
+        <td class="mono nowrap">{{ limit_display(r.min_value, r.max_value, r.unit, r.value_type) }}</td>
+        <td class="num mono">{{ value_display(r.value, r.unit, r.value_type) }}</td><td>{{ res_chip(r.status) }}</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% if gname == "Grading" and zones %}
+    {% set within = zones|selectattr("within")|map(attribute="zone")|list %}
+    <p class="small" style="margin:10px 0 0"><strong>IS 383:2016 Table 9 zone check (cl. 6.3 tolerance applied):</strong> {% if within %}grading is within {{ within|join(", ") }}{% else %}grading does not fall within any zone{% endif %}.</p>
+    {% for z in zones if z.notes %}<p class="muted small" style="margin:2px 0 0">{{ z.zone }}: {{ z.notes|join("; ") }}</p>{% endfor %}
+  {% endif %}
 </div>
+{% endfor %}
 <div class="panel">
   <div class="panel-head"><h2>Used in production</h2><span class="muted small">Production records that used this lot</span></div>
   {% if used_in %}

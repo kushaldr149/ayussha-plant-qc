@@ -131,12 +131,27 @@ def save_qc_test(db: Session, user: User, form: dict) -> QCTest:
         if not params:
             errors.append("This material has no test parameters. Add them in Setup first.")
         values = form.get("values") or {}
+        workings = form.get("workings") or {}
         for p in params:
             raw = values.get(str(p.id), values.get(p.id, ""))
-            value = parse_num(raw, p.name, errors)
+            if p.value_type == "passfail":
+                text = str(raw or "").strip().lower()
+                if text not in ("", "pass", "fail", "1", "0"):
+                    errors.append(f"{p.name}: choose Pass or Fail.")
+                value = None if text == "" else (1.0 if text in ("pass", "1") else 0.0)
+                lo, hi = 1.0, None
+            else:
+                value = parse_num(raw, p.name, errors)
+                lo, hi = p.min_value, p.max_value
+            work = workings.get(str(p.id), "")
+            if work and len(work) > 20000:
+                errors.append(f"{p.name}: worksheet data is too large.")
+                work = ""
             results.append(dict(
                 parameter_id=p.id, name=p.name, unit=p.unit, min_value=p.min_value, max_value=p.max_value,
-                method=p.method, value=value, status=logic.evaluate(value, p.min_value, p.max_value),
+                method=p.method, value=value, group_name=p.group_name or "", frequency=p.frequency or "Every lot",
+                value_type=p.value_type or "number", workings=work or None,
+                status=logic.evaluate(value, lo, hi, periodic=p.periodic),
             ))
         if params and not any(r["value"] is not None for r in results):
             errors.append("Enter at least one test value.")

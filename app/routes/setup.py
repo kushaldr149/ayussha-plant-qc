@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .. import audit, logic, services
+from .. import is_library as lib
 from ..db import get_db
 from ..models import (
     CATEGORIES, UNITS, Material, ProductionComponent, QCParameter, QCResult, QCTest, Recipe, RecipeComponent, StockAdjustment, User,
@@ -137,17 +138,23 @@ def _materials(db: Session):
     return db.scalars(select(Material).order_by(Material.name)).all()
 
 
+def _param_ctx() -> dict:
+    from .. import is_library as _lib
+    return {"frequencies": _lib.FREQUENCIES, "groups": _lib.GROUPS,
+            "calcs": [("", "None")] + [(k, c.title) for k, c in _lib.CALCS.items()] + [("sieve", "Sieve analysis")]}
+
+
 @router.get("/parameters/new")
 def param_new(request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
     pre = request.query_params.get("material")
     return render(request, db, user, "param_form.html", p=None, materials=_materials(db),
-                  form={"material_id": pre} if pre else {})
+                  form={"material_id": pre} if pre else {}, **_param_ctx())
 
 
 @router.get("/parameters/{pid}")
 def param_edit(pid: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
     p = db.get(QCParameter, pid) or _404()
-    return render(request, db, user, "param_form.html", p=p, materials=_materials(db), form={})
+    return render(request, db, user, "param_form.html", p=p, materials=_materials(db), form={}, **_param_ctx())
 
 
 @router.post("/parameters/{pid}")
@@ -183,7 +190,7 @@ async def param_save(request: Request, pid: int | None = None, db: Session = Dep
             errors.append("This material already has a parameter with this name.")
     if errors:
         return render(request, db, user, "param_form.html", status_code=400, p=p, materials=_materials(db),
-                      form=form, errors=errors)
+                      form=form, errors=errors, **_param_ctx())
     is_new = p is None
     before = None if is_new else {"min": p.min_value, "max": p.max_value, "unit": p.unit, "method": p.method}
     if is_new:
@@ -194,6 +201,14 @@ async def param_save(request: Request, pid: int | None = None, db: Session = Dep
     p.min_value, p.max_value = mn, mx
     p.method = str(form.get("method", "")).strip()
     p.sort_order = order
+    p.group_name = str(form.get("group_name", "")).strip()
+    freq = str(form.get("frequency") or "Every lot")
+    p.frequency = freq if freq in lib.FREQUENCIES else "Every lot"
+    p.value_type = "passfail" if form.get("value_type") == "passfail" else "number"
+    calc = str(form.get("calc") or "")
+    p.calc = calc if calc in lib.CALCS or calc == "sieve" else ""
+    p.sieve_mm = services.parse_num(form.get("sieve_mm"), "Sieve size", []) if p.calc == "sieve" else None
+    p.note = str(form.get("note", "")).strip()
     p.active = True if is_new else form.get("active") == "on"
     db.flush()
     audit.record(db, user, "create" if is_new else "update", "parameter", p.id, {
@@ -291,3 +306,83 @@ def recipe_delete(rid: int, request: Request, db: Session = Depends(get_db), use
     db.commit()
     flash(request, f"Recipe {r.name} deleted.")
     return redirect("/setup#recipes")
+
+
+# ---------------------------------------------------------------- IS 383 test sets
+
+from .. import is_library as lib  # noqa: E402
+
+
+def _template_options(material: Material) -> dict:
+    fine = material.category == "Fine aggregate"
+    return {"fine": fine, "coarse_sources": lib.COARSE_SOURCES, "fine_sources": lib.FINE_SOURCES,
+            "gradings": list(lib.COARSE_GRADING), "zones": list(lib.FINE_ZONES), "uses": lib.USES,
+            "sources_list": lib.SOURCES}
+
+
+def _build_set(material: Material, opts) -> list:
+    if material.category == "Fine aggregate":
+        return lib.fine_set(str(opts.get("source", "")), str(opts.get("zone", "")), opts.get("frost") == "on")
+    if material.category == "Coarse aggregate":
+        return lib.coarse_set(str(opts.get("source", "")), str(opts.get("grading", "")), str(opts.get("use", "")),
+                              opts.get("m65") == "on", opts.get("frost") == "on")
+    raise ValueError("IS 383 test sets are available for materials in the Coarse aggregate or Fine aggregate category.")
+
+
+@router.get("/materials/{mid}/is383")
+def is383_page(mid: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+    m = db.get(Material, mid) or _404()
+    if m.category not in ("Coarse aggregate", "Fine aggregate"):
+        flash(request, "IS 383 test sets are for materials in the Coarse aggregate or Fine aggregate category. "
+                       "Change the material's category first.", "warn")
+        return redirect(f"/setup/materials/{mid}")
+    q = request.query_params
+    preview, error = None, None
+    if q.get("preview"):
+        try:
+            preview = _build_set(m, q)
+        except ValueError as e:
+            error = str(e)
+    existing = {p.name.lower() for p in m.parameters}
+    return render(request, db, user, "is383_form.html", m=m, o=_template_options(m), q=q, preview=preview,
+                  existing=existing, errors=[error] if error else None)
+
+
+@router.post("/materials/{mid}/is383")
+async def is383_apply(mid: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+    m = db.get(Material, mid) or _404()
+    form = await request.form()
+    try:
+        items = _build_set(m, form)
+    except ValueError as e:
+        flash(request, str(e), "error")
+        return redirect(f"/setup/materials/{mid}/is383")
+    by_name = {p.name.lower(): p for p in m.parameters}
+    added = updated = 0
+    for order, it in enumerate(items, start=1):
+        p = by_name.get(it.name.lower())
+        if p is None:
+            p = QCParameter(material_id=m.id, name=it.name)
+            db.add(p)
+            added += 1
+        else:
+            updated += 1
+        p.unit, p.min_value, p.max_value = it.unit, it.min, it.max
+        p.method, p.group_name, p.frequency = it.method_text, it.group, it.frequency
+        p.calc, p.value_type, p.sieve_mm, p.note = it.calc, it.value_type, it.sieve_mm, it.note
+        p.sort_order, p.active = order, True
+    keep = {it.name.lower() for it in items}
+    deactivated = 0
+    if form.get("deactivate_others") == "on":
+        for p in m.parameters:
+            if p.name.lower() not in keep and p.active:
+                p.active = False
+                deactivated += 1
+    db.flush()
+    audit.record(db, user, "apply_is383", "material", m.id, {
+        "material": m.name, "options": {k: str(form.get(k, "")) for k in ("source", "grading", "zone", "use", "m65", "frost")},
+        "added": added, "updated": updated, "deactivated": deactivated})
+    db.commit()
+    msg = f"IS 383 test set applied to {m.name}: {added} parameter(s) added, {updated} updated"
+    flash(request, msg + (f", {deactivated} other parameter(s) marked inactive." if deactivated else "."))
+    return redirect(f"/setup/materials/{mid}")

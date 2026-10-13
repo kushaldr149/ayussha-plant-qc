@@ -17,10 +17,14 @@ def parse_number(value) -> float | None:
     return number
 
 
-def evaluate(value: float | None, min_value: float | None, max_value: float | None) -> str:
-    """Status of one test value against its limits: pass, fail, missing or nolimit."""
+def evaluate(value: float | None, min_value: float | None, max_value: float | None, periodic: bool = False) -> str:
+    """Status of one test value against its limits: pass, fail, missing, skipped or nolimit.
+
+    A periodic test (monthly, quarterly...) left empty is "skipped": it was not due, so it does not make
+    the lot incomplete.
+    """
     if value is None:
-        return "missing"
+        return "skipped" if periodic else "missing"
     if min_value is None and max_value is None:
         return "nolimit"
     if min_value is not None and value < min_value:
@@ -32,7 +36,7 @@ def evaluate(value: float | None, min_value: float | None, max_value: float | No
 
 def overall_status(statuses: Iterable[str]) -> str:
     """Overall result of a test: fail if any value is out of limit, incomplete if any is missing."""
-    statuses = list(statuses)
+    statuses = [s for s in statuses if s != "skipped"]
     if not statuses:
         return "incomplete"
     if "fail" in statuses:
@@ -86,7 +90,23 @@ STATUS_LABELS = {
     "incomplete": "Incomplete",
     "missing": "Not entered",
     "nolimit": "No limit set",
+    "skipped": "Not tested (periodic)",
 }
+
+
+def limit_display(min_value, max_value, unit: str = "", value_type: str | None = "number") -> str:
+    if value_type == "passfail":
+        return "Pass required"
+    return limit_text(min_value, max_value, unit)
+
+
+def value_display(value, unit: str = "", value_type: str | None = "number") -> str:
+    if value is None:
+        return "—"
+    if value_type == "passfail":
+        return "Pass" if value >= 1 else "Fail"
+    text = f"{value:,.4f}".rstrip("0").rstrip(".")
+    return f"{text} {unit}".strip()
 
 PRODUCTION_LABELS = {
     "ok": "Within tolerance",

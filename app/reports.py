@@ -162,12 +162,16 @@ def qc_report_pdf(test: QCTest, settings: PlantSettings) -> bytes:
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("Test results", st["h"]))
     data = [[Paragraph(_t(h), st["cellb"]) for h in ("Parameter", "Method / reference", "Limit", "Result value", "Status")]]
+    group = None
     for r in test.results:
+        if (r.group_name or "") and r.group_name != group:
+            group = r.group_name
+            data.append([Paragraph(_t(group), st["cellb"]), "", "", "", ""])
         color = STATUS_COLOR.get(r.status, "#18201E")
         data.append([
             Paragraph(_t(r.name), st["cell"]), Paragraph(_t(r.method or "—"), st["cell"]),
-            Paragraph(_t(logic.limit_text(r.min_value, r.max_value, r.unit)), st["cell"]),
-            Paragraph(_t(f"{_num(r.value)} {r.unit}" if r.value is not None else "—"), st["cell"]),
+            Paragraph(_t(logic.limit_display(r.min_value, r.max_value, r.unit, r.value_type)), st["cell"]),
+            Paragraph(_t(logic.value_display(r.value, r.unit, r.value_type)), st["cell"]),
             Paragraph(f'<font color="{color}">{_t(logic.STATUS_LABELS.get(r.status, r.status))}</font>', st["cell"]),
         ])
     story.append(_grid(data, [42 * mm, 46 * mm, 34 * mm, 30 * mm, 28 * mm], st))
@@ -264,16 +268,18 @@ def qc_excel(tests: list[QCTest]) -> bytes:
             rows.append([
                 t.test_no, t.test_date, t.material_name, t.category, t.supplier, t.lot_no, t.vehicle_no,
                 t.quantity, t.unit,
-                r.name if r else None, r.method if r else None, r.unit if r else None,
-                r.min_value if r else None, r.max_value if r else None, r.value if r else None,
+                (r.group_name or "") if r else None, r.name if r else None, r.method if r else None,
+                r.unit if r else None, r.min_value if r else None, r.max_value if r else None,
+                (logic.value_display(r.value, "", r.value_type) if r.value_type == "passfail" else r.value) if r else None,
                 logic.STATUS_LABELS.get(r.status, r.status) if r else None,
+                (r.frequency or "Every lot") if r else None,
                 logic.STATUS_LABELS.get(t.overall, t.overall), t.decision, t.remarks,
                 t.created_by.display if t.created_by else "",
             ])
     ws = _sheet(wb, "Material QC", [
         "Test no.", "Test date", "Material", "Category", "Supplier", "Lot no.", "Vehicle no.", "Quantity", "Unit",
-        "Parameter", "Method / reference", "Parameter unit", "Min", "Max", "Value", "Result", "Overall",
-        "Decision", "Remarks", "Tested by"], rows)
+        "Group", "Parameter", "Method / reference", "Parameter unit", "Min", "Max", "Value", "Result", "Frequency",
+        "Overall", "Decision", "Remarks", "Tested by"], rows)
     for row in ws.iter_rows(min_row=2, min_col=2, max_col=2):
         for cell in row:
             cell.number_format = "dd-mmm-yyyy"

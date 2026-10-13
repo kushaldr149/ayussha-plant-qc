@@ -47,7 +47,7 @@ templates.env.filters["d"] = fmt_date
 templates.env.filters["dt"] = fmt_dt
 templates.env.globals.update(
     STATUS=logic.STATUS_LABELS, PROD=logic.PRODUCTION_LABELS, STRENGTH=logic.STRENGTH_LABELS, ROLES=ROLES, DECISIONS=DECISIONS,
-    CATEGORIES=CATEGORIES, UNITS=UNITS, limit_text=logic.limit_text, APP_NAME=config.APP_NAME,
+    CATEGORIES=CATEGORIES, UNITS=UNITS, limit_text=logic.limit_text, limit_display=logic.limit_display, value_display=logic.value_display, APP_NAME=config.APP_NAME,
 )
 
 

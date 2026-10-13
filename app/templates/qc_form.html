@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block title %}New material test{% endblock %}
 {% block content %}
-<div class="toolbar"><div><h1>New material test</h1><p class="muted">Each value is checked against the limits set for the material in Setup. The limits are saved with the test.</p></div></div>
+<div class="toolbar"><div><h1>New material test</h1><p class="muted">Each value is checked against the limits set for the material in Setup. Use a worksheet to calculate a value from the masses weighed; the workings are saved with the test. Periodic tests can be left empty when they are not due.</p></div></div>
 <script type="application/json" id="qc-payload">{{ payload|tojson }}</script>
 <script type="application/json" id="qc-values">{{ (values or {})|tojson }}</script>
+<script type="application/json" id="qc-workings">{{ (workings or {})|tojson }}</script>
 <form class="panel stack" method="post" action="/qc/new" id="qc-form">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
   <div class="fgrid">

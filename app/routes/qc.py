@@ -1,6 +1,9 @@
 """Inward material QC: list, new test, detail, decision change, delete."""
 from __future__ import annotations
 
+import json
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -65,9 +68,15 @@ def _form_context(db: Session):
     materials = db.scalars(
         select(Material).where(Material.active.is_(True)).options(selectinload(Material.parameters)).order_by(Material.name)
     ).all()
-    payload = {m.id: {"supplier": m.supplier, "params": [
-        {"id": p.id, "name": p.name, "unit": p.unit, "min": p.min_value, "max": p.max_value, "method": p.method}
+    payload = {m.id: {"supplier": m.supplier, "category": m.category, "params": [
+        {"id": p.id, "name": p.name, "unit": p.unit, "min": p.min_value, "max": p.max_value, "method": p.method,
+         "group": p.group_name or "", "frequency": p.frequency or "Every lot", "calc": p.calc or "",
+         "type": p.value_type or "number", "sieve": p.sieve_mm, "note": p.note or ""}
         for p in m.parameters if p.active]} for m in materials}
+    from .. import is_library as _lib
+    calcs = {k: {"title": c.title, "method": c.method, "inputs": c.inputs, "formulas": c.formulas}
+             for k, c in _lib.CALCS.items()}
+    payload = {"materials": payload, "calcs": calcs}
     return materials, payload
 
 
@@ -86,12 +95,13 @@ async def qc_create(request: Request, db: Session = Depends(get_db), user: User 
     form = {k: raw.get(k, "") for k in ("test_date", "material_id", "supplier", "lot_no", "vehicle_no",
                                          "quantity", "unit", "decision", "remarks")}
     form["values"] = {k[2:]: v for k, v in raw.items() if k.startswith("p_")}
+    form["workings"] = {k[2:]: v for k, v in raw.items() if k.startswith("w_")}
     try:
         test = services.save_qc_test(db, user, form)
     except services.ValidationError as e:
         materials, payload = _form_context(db)
         return render(request, db, user, "qc_form.html", status_code=400, materials=materials, payload=payload,
-                      form=form, values=form["values"], errors=e.messages)
+                      form=form, values=form["values"], workings=form["workings"], errors=e.messages)
     flash(request, f"Test {test.test_no} saved.")
     return redirect(f"/qc/{test.id}")
 
@@ -109,7 +119,44 @@ def qc_detail(test_id: int, request: Request, db: Session = Depends(get_db), use
     used_in = db.scalars(
         select(ProductionComponent).where(ProductionComponent.lot_test_id == test.id).limit(100)
     ).all()
-    return render(request, db, user, "qc_detail.html", t=test, used_in=used_in)
+    return render(request, db, user, "qc_detail.html", t=test, used_in=used_in, **result_view(test))
+
+
+_SIEVE_NAME = re.compile(r"^Passing (\d+(?:\.\d+)?) (mm|µm) sieve$")
+
+
+def result_view(test: QCTest) -> dict:
+    """Results grouped for display, parsed worksheet workings, and the IS 383 zone check for fine aggregate."""
+    from .. import is_library as _lib
+    groups: list[tuple[str, list]] = []
+    work: dict[int, dict] = {}
+    passing: dict[float, float] = {}
+    crushed = False
+    for r in test.results:
+        g = r.group_name or "Tests"
+        bucket = next((rows for name, rows in groups if name == g), None)
+        if bucket is None:
+            bucket = []
+            groups.append((g, bucket))
+        bucket.append(r)
+        if r.workings:
+            try:
+                w = json.loads(r.workings)
+                c = _lib.CALCS.get(w.get("calc", ""))
+                w["title"] = c.title if c else ("Sieve analysis" if w.get("calc") == "sieve" else "")
+                w["formulas"] = c.formulas if c else []
+                w["labels"] = dict(c.inputs) if c else {}
+                work[r.id] = w
+            except (ValueError, TypeError, AttributeError):
+                pass
+        m = _SIEVE_NAME.match(r.name)
+        if m and r.value is not None:
+            mm = float(m.group(1)) / (1000 if m.group(2) == "µm" else 1)
+            passing[round(mm, 3)] = r.value
+            if abs(mm - 0.15) < 1e-9 and (r.max_value or 0) > 10:
+                crushed = True
+    zones = _lib.classify_zone(passing, crushed) if test.category == "Fine aggregate" and len(passing) >= 3 else None
+    return {"groups": groups, "work": work, "zones": zones}
 
 
 @router.post("/{test_id}/decision")
@@ -121,7 +168,8 @@ async def qc_decision(test_id: int, request: Request, db: Session = Depends(get_
         services.change_decision(db, user, test, str(form.get("decision", "")), str(form.get("remarks", "")))
     except services.ValidationError as e:
         used_in = db.scalars(select(ProductionComponent).where(ProductionComponent.lot_test_id == test.id)).all()
-        return render(request, db, user, "qc_detail.html", status_code=400, t=test, used_in=used_in, errors=e.messages)
+        return render(request, db, user, "qc_detail.html", status_code=400, t=test, used_in=used_in, errors=e.messages,
+                      **result_view(test))
     flash(request, "Decision saved.")
     return redirect(f"/qc/{test.id}")
 
@@ -142,3 +190,43 @@ def qc_delete(test_id: int, request: Request, db: Session = Depends(get_db), use
     db.commit()
     flash(request, f"Test {test.test_no} deleted.")
     return redirect("/qc")
+
+
+# ---------------------------------------------------------------- worksheets
+
+from fastapi.responses import JSONResponse  # noqa: E402
+
+from .. import is_library as lib  # noqa: E402
+
+
+@router.post("/calc")
+async def qc_calc(request: Request, user: User = Depends(require("qc.write"))):
+    """Run an IS 2386 worksheet. Form: calc=<key>, in_<name>=<value> ...; sieve: r_<mm>=<g>, total=<g>, crushed."""
+    form = await request.form()
+    key = str(form.get("calc", ""))
+    try:
+        if key == "sieve":
+            retained = {}
+            for k, v in form.items():
+                if k.startswith("r_") and str(v).strip() != "":
+                    retained[float(k[2:])] = float(str(v).replace(",", ""))
+            total_raw = str(form.get("total", "")).strip()
+            res = lib.sieve_analysis(retained, float(total_raw) if total_raw else None)
+            out = {"passing": {f"{s:g}": p for s, p in res["passing"].items()}, "fm": res["fm"],
+                   "total": res["total"], "fm_sieves": [f"{s:g}" for s in res["fm_sieves"]]}
+            if form.get("fine") == "1":
+                out["zones"] = lib.classify_zone(res["passing"], crushed=form.get("crushed") == "1")
+            return JSONResponse({"ok": True, "result": out})
+        if key not in lib.CALCS:
+            raise ValueError("Unknown worksheet.")
+        values = {}
+        for name, _label in lib.CALCS[key].inputs:
+            raw = str(form.get("in_" + name, "")).strip().replace(",", "")
+            if raw:
+                values[name] = float(raw)
+        return JSONResponse({"ok": True, "result": lib.run_calc(key, values)})
+    except ValueError as e:
+        msg = str(e)
+        if msg.startswith("could not convert"):
+            msg = "Enter numbers only."
+        return JSONResponse({"ok": False, "error": msg}, status_code=400)

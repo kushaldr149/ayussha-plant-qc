@@ -170,3 +170,13 @@ pre.code{font-family:var(--mono);font-size:.82rem;background:var(--surface-2);bo
 .comp-head.res,.comp.res{grid-template-columns:1fr 1fr 1fr 1fr}
 .comp.res{background:transparent;border:0;padding:0 0}
 @media (max-width:700px){.comp.disp{grid-template-columns:1fr 1fr}.comp.res{grid-template-columns:1fr 1fr}}
+
+/* worksheets in the material test form */
+tr.ws td{background:var(--surface-2)}
+.worksheet{display:grid;gap:10px;padding:6px 2px}
+.worksheet .ws-head{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.worksheet .fgrid{grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr))}
+.worksheet .zone-out:empty{display:none}
+.ptable select.pv{max-width:150px}
+details.work summary{cursor:pointer;color:var(--accent)}
+details.work .mono{white-space:pre-wrap}
