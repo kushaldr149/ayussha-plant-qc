@@ -23,7 +23,7 @@ if not exist ".venv\Scripts\python.exe" (
 
 echo Installing the app's packages (this needs internet the first time)...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip >nul
-".venv\Scripts\python.exe" -m pip install -r requirements.txt || goto :fail
+".venv\Scripts\python.exe" -m pip install --prefer-binary -r requirements.txt || goto :fail
 
 if not exist ".env" (
   copy ".env.example" ".env" >nul
