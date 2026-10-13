@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Reports{% endblock %}
 {% block content %}
-<div class="toolbar"><div><h1>Reports</h1><p class="muted">Excel exports for a date range. PDF test reports and batch certificates are on each test and production record.</p></div></div>
+<div class="toolbar"><div><h1>Reports</h1><p class="muted">Excel exports for a date range. PDF documents (test reports, batch certificates, delivery notes, strength reports) are on each record's own page.</p></div></div>
 <form class="panel stack" method="get" action="/reports" style="max-width:760px">
   <div class="fgrid">
     <label class="f"><span>From</span><input type="date" name="from" id="r_from" value="{{ start.isoformat() }}"></label>
@@ -19,6 +19,26 @@
     <h2>Production log</h2>
     <p class="muted">One row per component: planned, actual, deviation, lot used and the lot's QC decision.</p>
     <a class="btn primary" href="/reports/production.xlsx?from={{ start.isoformat() }}&amp;to={{ end.isoformat() }}">Download Excel ({{ start|d }} to {{ end|d }})</a>
+  </div>
+  <div class="panel">
+    <h2>Dispatch register</h2>
+    <p class="muted">One row per production record loaded: order, customer, site, vehicles, bags, delivery and receipt.</p>
+    <a class="btn primary" href="/reports/dispatch.xlsx?from={{ start.isoformat() }}&amp;to={{ end.isoformat() }}">Download Excel ({{ start|d }} to {{ end|d }})</a>
+  </div>
+  <div class="panel">
+    <h2>Strength test register</h2>
+    <p class="muted">One row per specimen, by casting date: age, load, strength, mean at that age and the acceptance check.</p>
+    <a class="btn primary" href="/reports/strength.xlsx?from={{ start.isoformat() }}&amp;to={{ end.isoformat() }}">Download Excel ({{ start|d }} to {{ end|d }})</a>
+  </div>
+  <div class="panel">
+    <h2>NCR register</h2>
+    <p class="muted">NCRs raised in the period with containment, root cause, corrective action, owner and status.</p>
+    <a class="btn primary" href="/reports/ncr.xlsx?from={{ start.isoformat() }}&amp;to={{ end.isoformat() }}">Download Excel ({{ start|d }} to {{ end|d }})</a>
+  </div>
+  <div class="panel">
+    <h2>Stock and calibration (current)</h2>
+    <p class="muted">These show the position today; the period above does not apply.</p>
+    <div class="row"><a class="btn primary" href="/reports/stock.xlsx">Raw material stock by lot</a><a class="btn" href="/reports/equipment.xlsx">Equipment calibration status</a></div>
   </div>
 </div>
 {% endblock %}

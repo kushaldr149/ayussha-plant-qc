@@ -18,6 +18,26 @@
   <a class="tile {% if d.over7 %}bad{% endif %}" href="/production?status=over&amp;from={{ week_start }}"><span class="k">Over tolerance, 7 days</span><span class="v">{{ d.over7 }}</span></a>
 </div>
 
+<div class="tiles">
+  <a class="tile" href="/dispatch?status=Dispatched"><span class="k">Dispatches on the road</span><span class="v">{{ x.in_transit }}</span></a>
+  <a class="tile {% if x.strength_due %}warn{% endif %}" href="/strength"><span class="k">Strength tests due today or overdue</span><span class="v">{{ x.strength_due|length }}</span></a>
+  <a class="tile {% if x.ncr_overdue %}bad{% elif x.ncr_open %}warn{% endif %}" href="/ncr?status=open"><span class="k">Open NCRs{% if x.ncr_overdue %} ({{ x.ncr_overdue|length }} overdue){% endif %}</span><span class="v">{{ x.ncr_open }}</span></a>
+  <a class="tile {% if x.cal_due %}warn{% endif %}" href="/equipment"><span class="k">Calibrations due in 30 days</span><span class="v">{{ x.cal_due|length }}</span></a>
+  <a class="tile {% if x.low_stock %}bad{% endif %}" href="/stock"><span class="k">Materials below reorder level</span><span class="v">{{ x.low_stock|length }}</span></a>
+</div>
+
+{% if x.strength_due or x.ncr_overdue or x.cal_due or x.low_stock %}
+<div class="panel">
+  <div class="panel-head"><h2>Due and overdue</h2></div>
+  <ul class="alist">
+    {% for t in x.strength_due %}<li><a href="/strength/{{ t.sample.id }}"><span class="chip {{ 'fail' if t.overdue else 'hold' }}">{{ "Test overdue" if t.overdue else "Test due today" }}</span><span class="t"><span class="mono">{{ t.sample.sample_no }}</span> · {{ t.age }}-day</span><span class="d">{{ t.due|d }}</span></a></li>{% endfor %}
+    {% for n in x.ncr_overdue %}<li><a href="/ncr/{{ n.id }}"><span class="chip fail">NCR overdue</span><span class="t"><span class="mono">{{ n.ncr_no }}</span> · {{ n.title }}</span><span class="d">{{ n.due_date|d }}</span></a></li>{% endfor %}
+    {% for e in x.cal_due %}<li><a href="/equipment/{{ e.id }}"><span class="chip {{ 'fail' if e.next_due < now else 'hold' }}">{{ "Calibration overdue" if e.next_due < now else "Calibration due" }}</span><span class="t"><span class="mono">{{ e.tag }}</span> · {{ e.name }}</span><span class="d">{{ e.next_due|d }}</span></a></li>{% endfor %}
+    {% for m in x.low_stock %}<li><a href="/stock/material/{{ m.material.id }}"><span class="chip fail">Low stock</span><span class="t">{{ m.material.name }} · usable {{ m.usable|num }} {{ m.unit }} (reorder at {{ m.material.reorder_level|num }})</span><span class="d"></span></a></li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 {% if not steps|selectattr(1)|list|length == steps|length %}
 <div class="panel">
   <div class="panel-head"><h2>Getting the plant ready</h2></div>

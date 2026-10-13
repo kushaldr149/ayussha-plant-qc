@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Stock adjustment{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><h1>Record stock adjustment</h1><p class="muted">Use this to correct the book stock after a physical count, a spillage or a return to the supplier. Enter a negative quantity to remove stock.</p></div></div>
+<form class="panel stack" method="post" action="/stock/adjust" style="max-width:760px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f"><span>Date</span><input type="date" name="adj_date" id="a_date" required value="{{ v.get('adj_date') or today }}"></label>
+    <label class="f"><span>Material</span><select name="material_id" id="a_mat" required><option value="">Select material</option>{% for m in materials %}<option value="{{ m.id }}" {% if v.get('material_id') == m.id|string %}selected{% endif %}>{{ m.name }} ({{ m.stock_unit or "kg" }})</option>{% endfor %}</select></label>
+    <label class="f"><span>Lot no.</span><input name="lot_no" id="a_lot" class="mono" value="{{ v.get('lot_no', '') }}"></label>
+    <div class="two">
+      <label class="f"><span>Quantity (+ / −)</span><input name="quantity" id="a_qty" inputmode="decimal" class="mono" required value="{{ v.get('quantity', '') }}"></label>
+      <label class="f"><span>Unit</span><select name="unit" id="a_unit">{% for u in units %}<option {% if v.get('unit', 'kg') == u %}selected{% endif %}>{{ u }}</option>{% endfor %}</select></label>
+    </div>
+    <label class="f wide"><span>Reason</span><textarea name="reason" id="a_reason" rows="2" required>{{ v.get('reason', '') }}</textarea></label>
+  </div>
+  <div class="actions"><a class="btn" href="/stock">Cancel</a><button class="btn primary" type="submit">Save adjustment</button></div>
+</form>
+{% endblock %}

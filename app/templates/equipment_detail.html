@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ e.tag }}{% endblock %}
+{% block content %}
+{% set c = cal_form if cal_form else {} %}
+{% set days = (e.next_due - now).days if e.next_due else none %}
+<div class="toolbar">
+  <div><p class="muted mono" style="margin:0">{{ e.tag }}</p><h1>{{ e.name }}</h1></div>
+  <div class="row"><span class="chip {{ {'In use': 'pass', 'Out of service': 'fail'}.get(e.status, 'info') }}">{{ e.status }}</span>
+    {% if days is not none and days < 0 %}<span class="chip fail">Calibration overdue</span>{% elif days is not none and days <= 30 %}<span class="chip hold">Due in {{ days }} days</span>{% endif %}
+    <a class="btn ghost" href="/equipment">All equipment</a></div>
+</div>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Date</th><th>Agency</th><th>Certificate no.</th><th>Result</th><th>Next due</th><th>Remarks</th></tr></thead>
+  <tbody>
+  {% for cal in e.calibrations %}
+    <tr><td class="nowrap">{{ cal.cal_date|d }}</td><td>{{ cal.agency or "—" }}</td><td class="mono">{{ cal.certificate_no or "—" }}</td>
+      <td><span class="chip {{ {'Within limits': 'pass', 'Adjusted': 'hold', 'Out of limits': 'fail'}.get(cal.result, 'info') }}">{{ cal.result }}</span></td>
+      <td class="nowrap">{{ cal.next_due|d }}</td><td>{{ cal.remarks or "—" }}</td></tr>
+  {% else %}<tr><td colspan="6" class="empty">No calibrations recorded yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+{% if can("equipment.write") %}
+<div class="grid2">
+  <form class="panel stack" method="post" action="/equipment/{{ e.id }}/calibration">
+    <h2>Record calibration</h2>
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="fgrid">
+      <label class="f"><span>Calibration date</span><input type="date" name="cal_date" id="c_date" required value="{{ c.get('cal_date') or today }}"></label>
+      <label class="f"><span>Result</span><select name="result" id="c_result" required><option value="">Select result</option>{% for r in results %}<option {% if c.get('result') == r %}selected{% endif %}>{{ r }}</option>{% endfor %}</select></label>
+      <label class="f"><span>Agency / laboratory</span><input name="agency" id="c_agency" value="{{ c.get('agency', '') }}"></label>
+      <label class="f"><span>Certificate no.</span><input name="certificate_no" id="c_cert" class="mono" value="{{ c.get('certificate_no', '') }}"></label>
+      <label class="f"><span>Next due</span><input type="date" name="next_due" id="c_due" value="{{ c.get('next_due', '') }}"><span class="hint">{% if e.interval_days %}Calibration date + {{ e.interval_days }} days if left empty.{% else %}No interval set for this equipment.{% endif %}</span></label>
+      <label class="f wide"><span>Remarks</span><textarea name="remarks" id="c_rem" rows="2">{{ c.get('remarks', '') }}</textarea></label>
+    </div>
+    <div class="actions"><button class="btn primary" type="submit">Save calibration</button></div>
+  </form>
+  <form class="panel stack" method="post" action="/equipment/{{ e.id }}">
+    <h2>Equipment details</h2>
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    {% include "_equipment_fields.html" %}
+    <div class="actions"><button class="btn primary" type="submit">Save details</button></div>
+  </form>
+</div>
+{% else %}
+<div class="panel"><dl class="kv"><dt>Location</dt><dd>{{ e.location or "—" }}</dd><dt>Make / model</dt><dd>{{ e.make_model or "—" }}</dd><dt>Serial no.</dt><dd>{{ e.serial_no or "—" }}</dd><dt>Range</dt><dd>{{ e.range_text or "—" }}</dd><dt>Interval</dt><dd>{{ e.interval_days ~ " days" if e.interval_days else "—" }}</dd></dl></div>
+{% endif %}
+{% endblock %}

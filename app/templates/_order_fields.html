@@ -1,0 +1,19 @@
+{# Shared order fields. Expects: o (or None), form, customers, grades, statuses, sites_json #}
+{% set v = form if form else {} %}
+<script type="application/json" id="sites-payload">{{ sites_json|tojson }}</script>
+<div class="fgrid">
+  <label class="f"><span>Order no.</span><input name="order_no" id="o_no" class="mono" value="{{ v.get('order_no', o.order_no if o else '') }}" placeholder="Automatic if left empty"></label>
+  <label class="f"><span>Order date</span><input type="date" name="order_date" id="o_date" required value="{{ v.get('order_date', o.order_date.isoformat() if o else today) }}"></label>
+  <label class="f"><span>Customer reference / PO</span><input name="customer_ref" id="o_ref" value="{{ v.get('customer_ref', o.customer_ref if o else '') }}"></label>
+  {% set cust = v.get('customer_id', (o.customer_id|string) if o else '') %}
+  <label class="f"><span>Customer</span><select name="customer_id" id="o_cust" required><option value="">Select customer</option>{% for c in customers %}<option value="{{ c.id }}" {% if cust == c.id|string %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></label>
+  {% set site = v.get('site_id', (o.site_id|string) if o and o.site_id else '') %}
+  <label class="f"><span>Site</span><select name="site_id" id="o_site" data-current="{{ site }}"><option value="">Select site</option></select></label>
+  {% set gr = v.get('grade_id', (o.grade_id|string) if o and o.grade_id else '') %}
+  <label class="f"><span>Concrete grade</span><select name="grade_id" id="o_grade"><option value="">Not specified</option>{% for g in grades %}<option value="{{ g.id }}" {% if gr == g.id|string %}selected{% endif %}>{{ g.name }}</option>{% endfor %}</select></label>
+  <label class="f"><span>Quantity ordered (m³)</span><input name="quantity_m3" id="o_qty" inputmode="decimal" class="mono" value="{{ v.get('quantity_m3', o.quantity_m3 if o and o.quantity_m3 is not none else '') }}"></label>
+  <label class="f"><span>Required by</span><input type="date" name="required_date" id="o_req" value="{{ v.get('required_date', o.required_date.isoformat() if o and o.required_date else '') }}"></label>
+  {% set st = v.get('status', o.status if o else 'Open') %}
+  <label class="f"><span>Status</span><select name="status" id="o_status">{% for s in statuses %}<option {% if s == st %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label class="f wide"><span>Remarks</span><textarea name="remarks" id="o_rem" rows="2">{{ v.get('remarks', o.remarks if o else '') }}</textarea></label>
+</div>

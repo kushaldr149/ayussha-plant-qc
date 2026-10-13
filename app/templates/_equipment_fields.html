@@ -1,0 +1,13 @@
+{% set v = form if form else {} %}
+<div class="fgrid">
+  <label class="f"><span>Equipment ID / tag</span><input name="tag" id="e_tag" class="mono" required value="{{ v.get('tag', e.tag if e else '') }}"></label>
+  <label class="f"><span>Name</span><input name="name" id="e_name" required value="{{ v.get('name', e.name if e else '') }}"></label>
+  <label class="f"><span>Location</span><input name="location" id="e_loc" value="{{ v.get('location', e.location if e else '') }}"></label>
+  <label class="f"><span>Make / model</span><input name="make_model" id="e_make" value="{{ v.get('make_model', e.make_model if e else '') }}"></label>
+  <label class="f"><span>Serial no.</span><input name="serial_no" id="e_serial" class="mono" value="{{ v.get('serial_no', e.serial_no if e else '') }}"></label>
+  <label class="f"><span>Range / capacity</span><input name="range_text" id="e_range" value="{{ v.get('range_text', e.range_text if e else '') }}"></label>
+  <label class="f"><span>Calibration interval (days)</span><input name="interval_days" id="e_int" inputmode="numeric" class="mono" value="{{ v.get('interval_days', e.interval_days if e and e.interval_days else '') }}"><span class="hint">Used to work out the next due date when a calibration is recorded.</span></label>
+  <label class="f"><span>Next due</span><input type="date" name="next_due" id="e_due" value="{{ v.get('next_due', e.next_due.isoformat() if e and e.next_due else '') }}"></label>
+  <label class="f"><span>Status</span><select name="status" id="e_status">{% for s in statuses %}<option {% if s == v.get('status', e.status if e else 'In use') %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label class="f wide"><span>Notes</span><textarea name="notes" id="e_notes" rows="2">{{ v.get('notes', e.notes if e else '') }}</textarea></label>
+</div>

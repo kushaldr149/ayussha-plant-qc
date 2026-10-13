@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit vehicle" if v else "Add vehicle" }}{% endblock %}
+{% block content %}
+{% set x = form if form else {} %}
+<div class="toolbar"><div><h1>{{ "Edit vehicle" if v else "Add vehicle" }}</h1></div></div>
+<form class="panel stack" method="post" action="{{ '/setup/vehicles/%d' % v.id if v else '/setup/vehicles/new' }}" style="max-width:640px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f"><span>Registration / unit no.</span><input name="reg_no" id="v_reg" class="mono" required value="{{ x.get('reg_no', v.reg_no if v else '') }}"></label>
+    {% set cur = x.get('vehicle_type', v.vehicle_type if v else '') %}
+    <label class="f"><span>Type</span><select name="vehicle_type" id="v_type" required><option value="">Select type</option>{% for t in types %}<option {% if t == cur %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label class="f wide"><span>Description</span><input name="description" id="v_desc" value="{{ x.get('description', v.description if v else '') }}"></label>
+    {% if v %}<label class="check"><input type="checkbox" name="active" id="v_active" {% if v.active %}checked{% endif %}> Active</label>{% endif %}
+  </div>
+  <div class="actions"><a class="btn" href="/setup/masters#vehicles">Cancel</a><button class="btn primary" type="submit">Save vehicle</button></div>
+</form>
+{% endblock %}

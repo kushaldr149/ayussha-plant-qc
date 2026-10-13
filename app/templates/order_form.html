@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}New order{% endblock %}
+{% block content %}
+<div class="toolbar"><div><h1>New customer order</h1></div></div>
+<form class="panel stack" method="post" action="/orders/new" id="order-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {% include "_order_fields.html" %}
+  <div class="actions"><a class="btn" href="/orders">Cancel</a><button class="btn primary" type="submit">Save order</button></div>
+</form>
+{% endblock %}

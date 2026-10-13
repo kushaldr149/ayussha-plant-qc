@@ -27,6 +27,15 @@ PERMISSIONS = {
     "users.manage": {"admin"},
     "records.delete": {"admin"},
     "audit.view": {"admin", "management"},
+    "masters.write": {"admin", "qc"},           # customers, sites, vehicles
+    "orders.write": {"admin", "qc", "operator"},
+    "dispatch.write": {"admin", "qc", "operator"},
+    "strength.write": {"admin", "qc"},
+    "grades.write": {"admin"},
+    "stock.adjust": {"admin", "qc"},
+    "ncr.raise": {"admin", "qc", "operator"},
+    "ncr.manage": {"admin", "qc"},
+    "equipment.write": {"admin", "qc"},
 }
 
 

@@ -172,4 +172,61 @@
     $("#r_add").addEventListener("click", () => $("select", add()).focus());
     box.addEventListener("click", (e) => { if (e.target.hasAttribute("data-remove")) { e.target.closest(".comp").remove(); if (!box.children.length) add(); } });
   }
+
+  /* ---------------- Order form: sites follow the customer ---------------- */
+  const orderForm = $("#order-form");
+  if (orderForm) {
+    const sites = readJSON("sites-payload", {});
+    const cust = $("#o_cust"), site = $("#o_site");
+    const fill = () => {
+      const cur = site.dataset.current || site.value;
+      const list = sites[cust.value] || [];
+      site.innerHTML = '<option value="">' + (list.length ? "Select site" : "No sites for this customer") + "</option>" +
+        list.map((x) => `<option value="${x.id}" ${String(x.id) === String(cur) ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+      site.dataset.current = "";
+    };
+    cust.addEventListener("change", fill);
+    fill();
+  }
+
+  /* ---------------- Dispatch form: bag lines from stock ---------------- */
+  const dispForm = $("#dispatch-form");
+  if (dispForm) {
+    const stock = readJSON("stock-payload", []);
+    const initial = readJSON("items-initial", []);
+    const box = $("#d_items");
+    let seq = 0;
+    const opts = (sel) => '<option value="">Select production record</option>' + stock.map((r) =>
+      `<option value="${r.id}" ${String(r.id) === String(sel) ? "selected" : ""}>${esc(r.label)}${r.flagged ? " · flagged" : ""}</option>`).join("");
+    const update = (row) => {
+      const rec = stock.find((r) => String(r.id) === $("select", row).value);
+      const bags = num($("input", row).value);
+      $(".c-dev", row).textContent = rec ? rec.available + " bags" : "—";
+      const note = $(".c-note", row);
+      if (!rec) note.innerHTML = "";
+      else if (bags != null && !Number.isNaN(bags) && bags > rec.available) note.innerHTML = `<span class="note-bad">Only ${rec.available} bags in stock.</span>`;
+      else if (rec.flagged) note.innerHTML = '<span class="note-warn">This record is flagged (lot not accepted or over tolerance). A remark is required.</span>';
+      else note.innerHTML = "";
+    };
+    const add = (it = {}) => {
+      const n = seq++;
+      const row = document.createElement("div");
+      row.className = "comp disp";
+      row.innerHTML = `
+        <select name="i-${n}-production_id" aria-label="Production record">${opts(it.production_id)}</select>
+        <input name="i-${n}-bags" class="mono" inputmode="numeric" placeholder="Bags" aria-label="Bags" value="${esc(it.bags ?? "")}">
+        <span class="c-dev">—</span>
+        <button type="button" class="btn ghost" data-remove aria-label="Remove line">Remove</button>
+        <div class="c-note"></div>`;
+      box.appendChild(row);
+      update(row);
+      return row;
+    };
+    if (!stock.length) box.innerHTML = '<p class="note-warn">No filled bags are in stock. Bags come from the "Bags filled" field on production records.</p>';
+    else (initial.length ? initial : [{}]).forEach(add);
+    $("#d_add").addEventListener("click", () => { if (stock.length) $("select", add()).focus(); });
+    box.addEventListener("input", (e) => { const r = e.target.closest(".comp"); if (r) update(r); });
+    box.addEventListener("change", (e) => { const r = e.target.closest(".comp"); if (r) update(r); });
+    box.addEventListener("click", (e) => { if (e.target.hasAttribute("data-remove")) { e.target.closest(".comp").remove(); if (!box.children.length) add(); } });
+  }
 })();

@@ -23,9 +23,9 @@
   </div>
   <div class="wrap">
     <nav class="sections" aria-label="Sections">
-      {% set nav = [("/", "Overview"), ("/qc", "Material QC"), ("/production", "Production log"), ("/setup", "Setup")] %}
+      {% set nav = [("/", "Overview"), ("/qc", "Material QC"), ("/production", "Production"), ("/dispatch", "Dispatch"), ("/strength", "Strength tests"), ("/stock", "Stock"), ("/ncr", "NCR"), ("/equipment", "Equipment"), ("/setup", "Setup")] %}
       {% for href, label in nav %}
-        <a href="{{ href }}" {% if (href == "/" and path == "/") or (href != "/" and path.startswith(href)) %}aria-current="page"{% endif %}>{{ label }}</a>
+        <a href="{{ href }}" {% if (href == "/" and path == "/") or (href != "/" and (path.startswith(href) or (href == "/dispatch" and path.startswith("/orders")))) %}aria-current="page"{% endif %}>{{ label }}</a>
       {% endfor %}
       {% if can("reports") %}<a href="/reports" {% if path.startswith("/reports") %}aria-current="page"{% endif %}>Reports</a>{% endif %}
       {% if can("ai.review") %}<a href="/ai" {% if path.startswith("/ai") %}aria-current="page"{% endif %}>AI review</a>{% endif %}

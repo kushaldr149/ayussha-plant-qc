@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager %}
+{% block title %}Orders{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><p class="muted" style="margin:0"><a href="/dispatch">Dispatch</a></p><h1>Customer orders</h1><p class="muted">Each dispatch belongs to an order for a customer site and concrete grade.</p></div>
+  <div class="row">{% if can("orders.write") %}<a class="btn primary" href="/orders/new">New order</a>{% endif %}</div>
+</div>
+<form class="filters" method="get" action="/orders" data-autosubmit>
+  <label>Status<select name="status" id="o-status"><option value="">All</option>{% for s in statuses %}<option {% if f.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Search<input type="search" name="q" id="o-q" value="{{ f.get('q', '') }}" placeholder="Order no., customer, reference"></label>
+  <button class="btn" type="submit">Apply</button>{% if f %}<a class="btn ghost" href="/orders">Clear</a>{% endif %}
+</form>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Order no.</th><th>Date</th><th>Customer / site</th><th>Grade</th><th class="num">Ordered</th><th class="num">Dispatches</th><th>Required by</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for o in orders %}
+    {% set active = o.dispatches|selectattr("status", "in", ["Dispatched", "Delivered"])|list %}
+    <tr><td class="mono nowrap"><a class="rowlink" href="/orders/{{ o.id }}">{{ o.order_no }}</a></td><td class="nowrap">{{ o.order_date|d }}</td>
+      <td>{{ o.customer.name }}{% if o.site %}<div class="muted small">{{ o.site.name }}</div>{% endif %}</td>
+      <td>{{ o.grade.name if o.grade else "—" }}</td>
+      <td class="num mono">{% if o.quantity_m3 is not none %}{{ o.quantity_m3|num }} m³{% else %}—{% endif %}</td>
+      <td class="num">{{ active|length }}</td>
+      <td class="nowrap">{{ o.required_date|d }}</td>
+      <td><span class="chip {{ {'Open': 'hold', 'Closed': 'pass'}.get(o.status, 'info') }}">{{ o.status }}</span></td></tr>
+  {% else %}
+    <tr><td colspan="8" class="empty"><strong>No orders</strong>{% if f %}No orders match these filters.{% else %}Create an order for a customer site before dispatching.{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+<div class="row" style="justify-content:space-between"><span class="muted small">{{ total }} order{{ "s" if total != 1 }}</span>{{ pager(page, pages, f) }}</div>
+{% endblock %}

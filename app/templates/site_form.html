@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit site" if s else "Add site" }}{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><h1>{{ "Edit site" if s else "Add site" }}</h1></div></div>
+<form class="panel stack" method="post" action="{{ '/setup/sites/%d' % s.id if s else '/setup/sites/new' }}" style="max-width:760px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    {% set cur = v.get('customer_id', (s.customer_id|string) if s else '') %}
+    <label class="f wide"><span>Customer</span><select name="customer_id" id="s_cust" required><option value="">Select customer</option>{% for c in customers %}<option value="{{ c.id }}" {% if cur == c.id|string %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></label>
+    <label class="f wide"><span>Site name</span><input name="name" id="s_name" required value="{{ v.get('name', s.name if s else '') }}"></label>
+    <label class="f wide"><span>Site address</span><textarea name="address" id="s_addr" rows="2">{{ v.get('address', s.address if s else '') }}</textarea></label>
+    <label class="f"><span>Site contact</span><input name="contact_person" id="s_contact" value="{{ v.get('contact_person', s.contact_person if s else '') }}"></label>
+    <label class="f"><span>Phone</span><input name="phone" id="s_phone" value="{{ v.get('phone', s.phone if s else '') }}"></label>
+    {% if s %}<label class="check"><input type="checkbox" name="active" id="s_active" {% if s.active %}checked{% endif %}> Active</label>{% endif %}
+  </div>
+  <div class="actions"><a class="btn" href="/setup/masters#customers">Cancel</a><button class="btn primary" type="submit">Save site</button></div>
+</form>
+{% endblock %}

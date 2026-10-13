@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ o.order_no }}{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><p class="muted mono" style="margin:0">{{ o.order_no }}</p><h1>{{ o.customer.name }}{% if o.site %} · {{ o.site.name }}{% endif %}</h1></div>
+  <div class="row">{% if can("dispatch.write") and o.status == "Open" %}<a class="btn primary" href="/dispatch/new?order={{ o.id }}">New dispatch</a>{% endif %}<a class="btn ghost" href="/orders">All orders</a></div>
+</div>
+<div class="tiles">
+  <div class="tile"><span class="k">Grade</span><span class="v" style="font-size:1.2rem">{{ o.grade.name if o.grade else "—" }}</span></div>
+  <div class="tile"><span class="k">Ordered (m³)</span><span class="v">{% if o.quantity_m3 is not none %}{{ o.quantity_m3|num }}{% else %}—{% endif %}</span></div>
+  <div class="tile"><span class="k">Placed at site (m³)</span><span class="v">{{ delivered_m3|num }}</span></div>
+  <div class="tile"><span class="k">Dispatches</span><span class="v">{{ o.dispatches|selectattr("status", "in", ["Dispatched", "Delivered"])|list|length }}</span></div>
+</div>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Dispatch no.</th><th>Date</th><th class="num">Bags</th><th>Status</th><th class="num">Placed (m³)</th><th>Received by</th></tr></thead>
+  <tbody>
+  {% for d in o.dispatches %}
+    <tr><td class="mono"><a class="rowlink" href="/dispatch/{{ d.id }}">{{ d.dispatch_no }}</a></td><td>{{ d.dispatch_date|d }}</td><td class="num">{{ d.items|sum(attribute="bags") }}</td>
+      <td><span class="chip {{ {'Delivered': 'pass', 'Dispatched': 'hold', 'Returned': 'fail'}.get(d.status, 'info') }}">{{ d.status }}</span></td>
+      <td class="num mono">{{ d.delivered_m3|num if d.delivered_m3 is not none else "—" }}</td><td>{{ d.received_by or "—" }}</td></tr>
+  {% else %}<tr><td colspan="6" class="empty">No dispatches yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+{% if can("orders.write") %}
+<form class="panel stack" method="post" action="/orders/{{ o.id }}" id="order-form">
+  <h2>Edit order</h2>
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {% include "_order_fields.html" %}
+  <div class="actions"><button class="btn primary" type="submit">Save changes</button></div>
+</form>
+{% endif %}
+{% endblock %}

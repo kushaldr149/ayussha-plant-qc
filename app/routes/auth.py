@@ -109,4 +109,16 @@ def dashboard(request: Request, db: Session = Depends(get_db), user: User = Depe
     ]
     from datetime import timedelta
     week_start = (config.local_today() - timedelta(days=6)).isoformat()
-    return render(request, db, user, "dashboard.html", d=data, steps=steps, week_start=week_start)
+    today = config.local_today()
+    from .. import operations as ops
+    from ..models import NCR, Dispatch
+    ncrs = db.scalars(select(NCR).where(NCR.status != "Closed").order_by(NCR.due_date.is_(None), NCR.due_date)).all()
+    extra = {
+        "ncr_open": len(ncrs),
+        "ncr_overdue": [n for n in ncrs if n.due_date and n.due_date < today],
+        "cal_due": ops.calibration_due(db, today),
+        "strength_due": [x for x in ops.due_tests(db, today, ahead_days=0)],
+        "low_stock": [m for m in ops.raw_stock(db) if m.low],
+        "in_transit": db.scalar(select(func.count(Dispatch.id)).where(Dispatch.status == "Dispatched")) or 0,
+    }
+    return render(request, db, user, "dashboard.html", d=data, x=extra, steps=steps, week_start=week_start, now=today)

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ n.ncr_no }}{% endblock %}
+{% block content %}
+{% set NCLS = {"Open": "fail", "Action in progress": "hold", "Closed": "pass"} %}
+{% set v = form if form else {} %}
+{% set overdue = n.status != "Closed" and n.due_date and n.due_date < now %}
+<div class="toolbar">
+  <div><p class="muted mono" style="margin:0">{{ n.ncr_no }} · {{ n.source }}</p><h1>{{ n.title }}</h1></div>
+  <div class="row"><span class="chip {{ NCLS.get(n.status, 'info') }}">{{ n.status }}</span>{% if overdue %}<span class="chip fail">Overdue</span>{% endif %}<a class="btn ghost" href="/ncr">All NCRs</a></div>
+</div>
+<div class="grid2">
+  <div class="panel"><dl class="kv">
+    <dt>Raised</dt><dd>{{ n.raised_date|d }} by {{ n.raised_by.display if n.raised_by else "—" }}</dd>
+    <dt>Linked to</dt><dd>
+      {% if n.qc_test %}<div><a href="/qc/{{ n.qc_test.id }}">Material test {{ n.qc_test.test_no }}</a> · {{ n.qc_test.material_name }} lot {{ n.qc_test.lot_no }}</div>{% endif %}
+      {% if n.production %}<div><a href="/production/{{ n.production.id }}">Production {{ n.production.record_no }}</a></div>{% endif %}
+      {% if n.dispatch %}<div><a href="/dispatch/{{ n.dispatch.id }}">Dispatch {{ n.dispatch.dispatch_no }}</a></div>{% endif %}
+      {% if n.cube_sample %}<div><a href="/strength/{{ n.cube_sample.id }}">Strength sample {{ n.cube_sample.sample_no }}</a></div>{% endif %}
+      {% if not (n.qc_test or n.production or n.dispatch or n.cube_sample) %}—{% endif %}</dd>
+    <dt>Owner</dt><dd>{{ n.owner.display if n.owner else "Not assigned" }}</dd>
+    <dt>Due</dt><dd class="{{ 'bad' if overdue }}">{{ n.due_date|d }}</dd>
+    {% if n.status == "Closed" %}<dt>Closed</dt><dd>{{ n.closed_date|d }} by {{ n.closed_by.display if n.closed_by else "—" }}</dd>{% endif %}
+  </dl></div>
+  <div class="panel"><h2>What was found</h2><p style="margin:8px 0 0;white-space:pre-wrap">{{ n.description }}</p></div>
+</div>
+{% if can("ncr.manage") %}
+<form class="panel stack" method="post" action="/ncr/{{ n.id }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f wide"><span>Immediate containment</span><textarea name="containment" id="n_cont" rows="2">{{ v.get('containment', n.containment) }}</textarea></label>
+    <label class="f wide"><span>Root cause</span><textarea name="root_cause" id="n_root" rows="3">{{ v.get('root_cause', n.root_cause) }}</textarea></label>
+    <label class="f wide"><span>Corrective action</span><textarea name="corrective_action" id="n_ca" rows="3">{{ v.get('corrective_action', n.corrective_action) }}</textarea></label>
+    {% set ow = v.get('owner_id', (n.owner_id|string) if n.owner_id else '') %}
+    <label class="f"><span>Owner</span><select name="owner_id" id="n_owner"><option value="">Not assigned</option>{% for u in users %}<option value="{{ u.id }}" {% if ow == u.id|string %}selected{% endif %}>{{ u.display }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Action due by</span><input type="date" name="due_date" id="n_due" value="{{ v.get('due_date', n.due_date.isoformat() if n.due_date else '') }}"></label>
+    <label class="f"><span>Status</span><select name="status" id="n_status">{% for s in statuses %}<option {% if s == v.get('status', n.status) %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+    <label class="f wide"><span>Verification of effectiveness</span><textarea name="verification" id="n_ver" rows="2" placeholder="Required to close">{{ v.get('verification', n.verification) }}</textarea></label>
+  </div>
+  <div class="actions"><button class="btn primary" type="submit">Save NCR</button></div>
+</form>
+{% else %}
+<div class="panel"><dl class="kv">
+  <dt>Containment</dt><dd style="white-space:pre-wrap">{{ n.containment or "—" }}</dd>
+  <dt>Root cause</dt><dd style="white-space:pre-wrap">{{ n.root_cause or "—" }}</dd>
+  <dt>Corrective action</dt><dd style="white-space:pre-wrap">{{ n.corrective_action or "—" }}</dd>
+  <dt>Verification</dt><dd style="white-space:pre-wrap">{{ n.verification or "—" }}</dd>
+</dl></div>
+{% endif %}
+{% endblock %}

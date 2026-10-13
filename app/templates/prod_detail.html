@@ -4,7 +4,7 @@
 {% block content %}
 <div class="toolbar">
   <div><p class="muted mono" style="margin:0">{{ r.record_no }}</p><h1>{{ r.product_line }} · {{ r.prod_date|d }}</h1></div>
-  <div class="row"><a class="btn" href="/production/{{ r.id }}/certificate.pdf" target="_blank" rel="noopener">Batch certificate (PDF)</a><a class="btn ghost" href="/production">Back to list</a></div>
+  <div class="row">{% if can("ncr.raise") %}<a class="btn" href="/ncr/new?production_id={{ r.id }}&amp;source=Production">Raise NCR</a>{% endif %}<a class="btn" href="/production/{{ r.id }}/certificate.pdf" target="_blank" rel="noopener">Batch certificate (PDF)</a><a class="btn ghost" href="/production">Back to list</a></div>
 </div>
 <div class="grid2">
   <div class="panel">

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Equipment{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><h1>Equipment and calibration</h1><p class="muted">Lab and plant equipment that needs calibration: weighbatchers, load cells, compression testing machine, balances, sieves and the like. Sorted by next due date.</p></div>
+  <div class="row">{% if can("reports") %}<a class="btn" href="/reports/equipment.xlsx">Export to Excel</a>{% endif %}{% if can("equipment.write") %}<a class="btn primary" href="/equipment/new">Add equipment</a>{% endif %}</div>
+</div>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>ID / tag</th><th>Equipment</th><th>Location</th><th>Last calibrated</th><th>Next due</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for e in rows %}
+    {% set last = e.calibrations[0] if e.calibrations else none %}
+    {% set days = (e.next_due - now).days if e.next_due else none %}
+    <tr><td class="mono nowrap"><a class="rowlink" href="/equipment/{{ e.id }}">{{ e.tag }}</a></td><td>{{ e.name }}{% if e.range_text %}<div class="muted small">{{ e.range_text }}</div>{% endif %}</td><td>{{ e.location or "—" }}</td>
+      <td>{% if last %}{{ last.cal_date|d }} {% if last.result == "Out of limits" %}<span class="chip fail">Out of limits</span>{% endif %}{% else %}—{% endif %}</td>
+      <td class="nowrap">{{ e.next_due|d }}{% if days is not none and e.status != "Retired" %}{% if days < 0 %}<div class="small bad">Overdue by {{ -days }} day{{ "s" if -days != 1 }}</div>{% elif days <= 30 %}<div class="small note-warn">Due in {{ days }} day{{ "s" if days != 1 }}</div>{% endif %}{% endif %}</td>
+      <td><span class="chip {{ {'In use': 'pass', 'Out of service': 'fail'}.get(e.status, 'info') }}">{{ e.status }}</span></td></tr>
+  {% else %}
+    <tr><td colspan="6" class="empty"><strong>No equipment yet</strong>Add each item that needs calibration, with its interval from your calibration plan.</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+{% endblock %}

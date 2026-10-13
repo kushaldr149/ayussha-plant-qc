@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Customers, vehicles and grades{% endblock %}
+{% block content %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/setup">Setup</a></p><h1>Customers, vehicles and grades</h1>
+<p class="muted">Used by orders, dispatch and strength tests.</p></div></div>
+
+<div class="panel" id="customers">
+  <div class="panel-head"><h2>Customers and sites</h2>{% if can("masters.write") %}<div class="row"><a class="btn" href="/setup/sites/new">Add site</a><a class="btn" href="/setup/customers/new">Add customer</a></div>{% endif %}</div>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Customer</th><th>Contact</th><th>Sites</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for c in customers %}
+      <tr><td>{% if can("masters.write") %}<a class="rowlink" href="/setup/customers/{{ c.id }}">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %}{% if c.gstin %}<div class="muted small mono">GSTIN {{ c.gstin }}</div>{% endif %}</td>
+        <td>{{ c.contact_person or "—" }}{% if c.phone %}<div class="muted small">{{ c.phone }}</div>{% endif %}</td>
+        <td>{% for s in c.sites %}{% if can("masters.write") %}<a href="/setup/sites/{{ s.id }}">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}{% if not s.active %} <span class="muted small">(inactive)</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}<span class="muted">No sites</span>{% endfor %}</td>
+        <td>{% if c.active %}<span class="chip pass">Active</span>{% else %}<span class="chip info">Inactive</span>{% endif %}</td></tr>
+    {% else %}
+      <tr><td colspan="4" class="empty"><strong>No customers yet</strong>Add the builders and developers you supply, then their sites.</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+</div>
+
+<div class="panel" id="vehicles">
+  <div class="panel-head"><h2>Vehicles</h2>{% if can("masters.write") %}<a class="btn" href="/setup/vehicles/new">Add vehicle</a>{% endif %}</div>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Registration / unit no.</th><th>Type</th><th>Description</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for v in vehicles %}
+      <tr><td class="mono">{% if can("masters.write") %}<a class="rowlink" href="/setup/vehicles/{{ v.id }}">{{ v.reg_no }}</a>{% else %}{{ v.reg_no }}{% endif %}</td><td>{{ v.vehicle_type }}</td><td>{{ v.description or "—" }}</td>
+        <td>{% if v.active %}<span class="chip pass">Active</span>{% else %}<span class="chip info">Inactive</span>{% endif %}</td></tr>
+    {% else %}
+      <tr><td colspan="4" class="empty"><strong>No vehicles yet</strong>Add the trucks that carry the bags and the mixer-on-wheels units.</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+</div>
+
+<div class="panel" id="grades">
+  <div class="panel-head"><h2>Concrete grades</h2>{% if can("grades.write") %}<a class="btn" href="/setup/grades/new">Add grade</a>{% endif %}</div>
+  <p class="muted small" style="margin:-4px 0 12px">Strength results are checked against the acceptance values entered here. Enter them from the specification that applies; nothing is pre-filled.</p>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Grade</th><th class="num">Specified strength</th><th class="num">Acceptance age</th><th class="num">Min. individual</th><th class="num">Min. mean</th><th>Reference</th></tr></thead>
+    <tbody>
+    {% for g in grades %}
+      <tr><td>{% if can("grades.write") %}<a class="rowlink" href="/setup/grades/{{ g.id }}">{{ g.name }}</a>{% else %}{{ g.name }}{% endif %}{% if not g.active %} <span class="muted small">(inactive)</span>{% endif %}</td>
+        <td class="num mono">{% if g.specified_strength_mpa is not none %}{{ g.specified_strength_mpa|num }} MPa{% else %}—{% endif %}</td>
+        <td class="num mono">{% if g.acceptance_age_days %}{{ g.acceptance_age_days }} days{% else %}—{% endif %}</td>
+        <td class="num mono">{% if g.min_individual_mpa is not none %}≥ {{ g.min_individual_mpa|num }} MPa{% else %}—{% endif %}</td>
+        <td class="num mono">{% if g.min_mean_mpa is not none %}≥ {{ g.min_mean_mpa|num }} MPa{% else %}—{% endif %}</td>
+        <td>{{ g.reference or "—" }}</td></tr>
+    {% else %}
+      <tr><td colspan="6" class="empty"><strong>No grades yet</strong>Add each concrete grade you supply.</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+</div>
+{% endblock %}

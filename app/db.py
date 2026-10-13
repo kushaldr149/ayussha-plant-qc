@@ -42,3 +42,28 @@ def init_db() -> None:
     from . import models  # noqa: F401  (register tables)
 
     Base.metadata.create_all(engine)
+    _add_missing_columns()
+
+
+def _add_missing_columns(eng=None) -> None:
+    """Add columns introduced by an update to tables that already exist.
+
+    create_all() creates new tables but never changes existing ones. New columns in this app are
+    always nullable, so adding them in place is safe and keeps an installed database working after
+    an update.
+    """
+    from sqlalchemy import inspect, text
+
+    eng = eng or engine
+    insp = inspect(eng)
+    existing_tables = set(insp.get_table_names())
+    with eng.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in existing_tables:
+                continue
+            have = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in have or not col.nullable:
+                    continue
+                coltype = col.type.compile(dialect=eng.dialect)
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {coltype}'))

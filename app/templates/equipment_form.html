@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Add equipment{% endblock %}
+{% block content %}
+<div class="toolbar"><div><h1>Add equipment</h1></div></div>
+<form class="panel stack" method="post" action="/equipment/new" style="max-width:860px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {% include "_equipment_fields.html" %}
+  <div class="actions"><a class="btn" href="/equipment">Cancel</a><button class="btn primary" type="submit">Save equipment</button></div>
+</form>
+{% endblock %}

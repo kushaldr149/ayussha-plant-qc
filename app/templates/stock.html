@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Stock{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><h1>Stock</h1><p class="muted">Raw material = quantity received on inward QC tests − actual quantity used in production ± adjustments. Bags = bags filled − bags on dispatches that are not cancelled or returned.</p></div>
+  <div class="row">{% if can("reports") %}<a class="btn" href="/reports/stock.xlsx">Export to Excel</a>{% endif %}{% if can("stock.adjust") %}<a class="btn" href="/stock/adjust">Record adjustment</a>{% endif %}</div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Raw materials</h2><span class="muted small">Usable = lots with decision Accepted</span></div>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Material</th><th>Category</th><th class="num">Usable</th><th class="num">On hold / rejected / untested</th><th class="num">Reorder level</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for ms in raw %}
+      <tr><td><a class="rowlink" href="/stock/material/{{ ms.material.id }}">{{ ms.material.name }}</a>{% if ms.unconverted %}<div class="small note-warn">{{ ms.unconverted|length }} quantit{{ "y" if ms.unconverted|length == 1 else "ies" }} in other units not counted</div>{% endif %}</td>
+        <td>{{ ms.material.category }}</td>
+        <td class="num mono">{{ ms.usable|num }} {{ ms.unit }}</td>
+        <td class="num mono">{{ (ms.balance - ms.usable)|num }} {{ ms.unit }}</td>
+        <td class="num mono">{% if ms.material.reorder_level is not none %}{{ ms.material.reorder_level|num }} {{ ms.unit }}{% else %}—{% endif %}</td>
+        <td>{% if ms.low %}<span class="chip fail">Below reorder level</span>{% elif ms.usable < 0 %}<span class="chip fail">Negative: check records</span>{% elif ms.material.reorder_level is not none %}<span class="chip pass">Above reorder level</span>{% else %}<span class="muted">No reorder level</span>{% endif %}</td></tr>
+    {% else %}
+      <tr><td colspan="6" class="empty"><strong>No materials</strong>Add materials in Setup. Stock is built from the quantities on inward QC tests.</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Filled bags in stock</h2>
+    <span class="muted small">{% for line, n in by_line.items() %}{{ line }}: <span class="mono">{{ n }}</span>{% if not loop.last %} · {% endif %}{% else %}No bags in stock{% endfor %}</span></div>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Production record</th><th>Date</th><th>Product line</th><th class="num">Filled</th><th class="num">Dispatched</th><th class="num">In stock</th><th>Flags</th></tr></thead>
+    <tbody>
+    {% for f in finished %}
+      <tr><td class="mono"><a class="rowlink" href="/production/{{ f.record.id }}">{{ f.record.record_no }}</a></td><td>{{ f.record.prod_date|d }}</td><td>{{ f.record.product_line }}</td>
+        <td class="num">{{ f.produced }}</td><td class="num">{{ f.dispatched }}</td><td class="num mono"><strong>{{ f.available }}</strong></td>
+        <td>{% if f.record.lot_issue %}<span class="chip hold">Lot not accepted</span> {% endif %}{% if f.record.status == "over" %}<span class="chip fail">Over tolerance</span>{% endif %}</td></tr>
+    {% else %}
+      <tr><td colspan="7" class="empty">No filled bags in stock. Bag counts come from the "Bags filled" field on production records.</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+</div>
+{% endblock %}

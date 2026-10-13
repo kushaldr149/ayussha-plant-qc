@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% from "_macros.html" import dec_chip, prod_chip, delete_form %}
+{% block title %}{{ d.dispatch_no }}{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar">
+  <div><p class="muted mono" style="margin:0">{{ d.dispatch_no }}</p><h1>{{ d.order.customer.name }}{% if d.order.site %} · {{ d.order.site.name }}{% endif %}</h1></div>
+  <div class="row">
+    <a class="btn" href="/dispatch/{{ d.id }}/note.pdf" target="_blank" rel="noopener">Delivery note (PDF)</a>
+    {% if can("strength.write") %}<a class="btn" href="/strength/new?dispatch={{ d.id }}">Record cubes cast</a>{% endif %}
+    {% if can("ncr.raise") %}<a class="btn" href="/ncr/new?dispatch_id={{ d.id }}&amp;source=Dispatch">Raise NCR</a>{% endif %}
+    <a class="btn ghost" href="/dispatch">All dispatches</a>
+  </div>
+</div>
+<div class="grid2">
+  <div class="panel"><dl class="kv">
+    <dt>Dispatch date</dt><dd>{{ d.dispatch_date|d }}</dd>
+    <dt>Order</dt><dd class="mono"><a href="/orders/{{ d.order.id }}">{{ d.order.order_no }}</a></dd>
+    <dt>Grade</dt><dd>{{ d.order.grade.name if d.order.grade else "—" }}</dd>
+    <dt>Truck</dt><dd class="mono">{{ d.truck.reg_no if d.truck else "—" }}</dd>
+    <dt>Mixer on wheels</dt><dd class="mono">{{ d.mixer.reg_no if d.mixer else "—" }}</dd>
+    <dt>Driver</dt><dd>{{ d.driver_name or "—" }}{% if d.driver_phone %} · {{ d.driver_phone }}{% endif %}</dd>
+    <dt>Departed</dt><dd>{{ d.departed_at|dt }}</dd>
+    <dt>Planned volume</dt><dd class="mono">{% if d.planned_m3 is not none %}{{ d.planned_m3|num }} m³{% else %}—{% endif %}</dd>
+    <dt>Entered by</dt><dd>{{ d.created_by.display if d.created_by else "—" }}</dd>
+    {% if d.remarks %}<dt>Remarks</dt><dd style="white-space:pre-wrap">{{ d.remarks }}</dd>{% endif %}
+  </dl></div>
+  <div class="panel">
+    <div class="panel-head"><h2>Delivery</h2><span class="chip {{ {'Delivered': 'pass', 'Dispatched': 'hold', 'Returned': 'fail'}.get(d.status, 'info') }}">{{ d.status }}</span></div>
+    {% if can("dispatch.write") %}
+    <form class="stack" method="post" action="/dispatch/{{ d.id }}/delivery">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <div class="fgrid">
+        <label class="f"><span>Status</span><select name="status" id="dl_status">{% for s in statuses %}<option {% if s == v.get('status', d.status) %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+        <label class="f"><span>Delivered at</span><input type="datetime-local" name="delivered_at" id="dl_at" value="{{ v.get('delivered_at', '') }}"><span class="hint">{% if d.delivered_at %}Recorded: {{ d.delivered_at|dt }}{% else %}Now, if left empty.{% endif %}</span></label>
+        <label class="f"><span>Received by (name at site)</span><input name="received_by" id="dl_by" value="{{ v.get('received_by', d.received_by) }}"></label>
+        <label class="f"><span>Volume placed (m³)</span><input name="delivered_m3" id="dl_m3" inputmode="decimal" class="mono" value="{{ v.get('delivered_m3', d.delivered_m3 if d.delivered_m3 is not none else '') }}"></label>
+        <label class="f wide"><span>Delivery remarks</span><textarea name="delivery_remarks" id="dl_rem" rows="2">{{ v.get('delivery_remarks', d.delivery_remarks) }}</textarea></label>
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Save delivery</button></div>
+    </form>
+    {% else %}
+    <dl class="kv"><dt>Delivered at</dt><dd>{{ d.delivered_at|dt }}</dd><dt>Received by</dt><dd>{{ d.received_by or "—" }}</dd><dt>Volume placed</dt><dd>{{ d.delivered_m3|num if d.delivered_m3 is not none else "—" }}</dd></dl>
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Bags loaded and traceability</h2><span class="muted small">Each production record and the material lots it used</span></div>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Production record</th><th>Product line</th><th class="num">Bags</th><th>Production status</th><th>Material lots used</th></tr></thead>
+    <tbody>
+    {% for it in d.items %}{% set p = it.production %}
+      <tr><td class="mono"><a href="/production/{{ p.id }}">{{ p.record_no }}</a><div class="muted small">{{ p.prod_date|d }}</div></td><td>{{ p.product_line }}</td><td class="num">{{ it.bags }}</td>
+        <td>{{ prod_chip(p.status) }}</td>
+        <td>{% for c in p.components %}<div>{{ c.material_name }} · {% if c.lot_test_id %}<a class="mono" href="/qc/{{ c.lot_test_id }}">{{ c.lot_no }}</a>{% else %}<span class="mono">{{ c.lot_no or "no lot" }}</span>{% endif %} {% if c.lot_no %}{{ dec_chip(c.lot_decision) }}{% endif %}</div>{% endfor %}</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+</div>
+
+<div class="grid2">
+  <div class="panel"><div class="panel-head"><h2>Strength samples</h2></div>
+    {% if samples %}<ul class="alist">{% for s in samples %}<li><a href="/strength/{{ s.id }}"><span class="mono">{{ s.sample_no }}</span><span class="t">{{ s.specimen_type }} · ages {{ s.test_ages or "—" }}</span><span class="d">{{ s.cast_date|d }}</span></a></li>{% endfor %}</ul>
+    {% else %}<p class="muted" style="margin:0">No specimens recorded for this delivery.</p>{% endif %}</div>
+  <div class="panel"><div class="panel-head"><h2>NCRs</h2></div>
+    {% if ncrs %}<ul class="alist">{% for n in ncrs %}<li><a href="/ncr/{{ n.id }}"><span class="mono">{{ n.ncr_no }}</span><span class="t">{{ n.title }}</span><span class="d">{{ n.status }}</span></a></li>{% endfor %}</ul>
+    {% else %}<p class="muted" style="margin:0">None.</p>{% endif %}</div>
+</div>
+{% if can("records.delete") %}{{ delete_form("/dispatch/%d/delete" % d.id, csrf, "Delete this dispatch") }}{% endif %}
+{% endblock %}

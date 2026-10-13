@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Raise NCR{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><h1>Raise non-conformance report</h1>
+{% if links %}<p class="muted">Linked to: {{ links|join(", ") }}</p>{% endif %}</div></div>
+<form class="panel stack" method="post" action="/ncr/new" style="max-width:860px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {% for k in ["qc_test_id", "production_id", "dispatch_id", "cube_sample_id"] %}<input type="hidden" name="{{ k }}" value="{{ v.get(k, '') }}">{% endfor %}
+  <div class="fgrid">
+    <label class="f"><span>Date raised</span><input type="date" name="raised_date" id="n_date" required value="{{ v.get('raised_date') or today }}"></label>
+    <label class="f"><span>Source</span><select name="source" id="n_source" required><option value="">Select source</option>{% for s in sources %}<option {% if v.get('source') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+    <label class="f wide"><span>Title</span><input name="title" id="n_title" required value="{{ v.get('title', '') }}"></label>
+    <label class="f wide"><span>What was found</span><textarea name="description" id="n_desc" rows="4" required>{{ v.get('description', '') }}</textarea></label>
+    <label class="f wide"><span>Immediate containment</span><textarea name="containment" id="n_cont" rows="2" placeholder="What was done straight away, e.g. lot held, bags quarantined">{{ v.get('containment', '') }}</textarea></label>
+    {% if can("ncr.manage") %}
+    <label class="f"><span>Owner</span><select name="owner_id" id="n_owner"><option value="">Not assigned</option>{% for u in users %}<option value="{{ u.id }}" {% if v.get('owner_id') == u.id|string %}selected{% endif %}>{{ u.display }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Action due by</span><input type="date" name="due_date" id="n_due" value="{{ v.get('due_date', '') }}"></label>
+    {% endif %}
+  </div>
+  <div class="actions"><a class="btn" href="/ncr">Cancel</a><button class="btn primary" type="submit">Raise NCR</button></div>
+</form>
+{% endblock %}

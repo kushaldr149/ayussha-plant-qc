@@ -11,15 +11,34 @@ It runs the same way on a PC or server at the plant (on the plant LAN) or on a c
 | Area | Details |
 |---|---|
 | Logins and roles | Administrator, QC / lab, Plant operator, Management (view only). One-time passwords that must be changed at first sign-in. Lockout after 5 failed sign-ins for 15 minutes. |
-| Setup | Plant settings (company, plant, batching tolerance, product lines, shifts), materials, test parameters with minimum/maximum limits and method reference, recipes. Nothing is pre-filled: all limits and the tolerance come from your specifications. |
-| Material QC | Test per lot: each value marked within limits or out of limit. Overall result, then a decision: Accepted, On hold or Rejected. An out-of-limit lot can only be accepted with a written remark. Limits are copied onto the test when it is saved, so later changes in Setup never rewrite past tests. |
-| Production log | Planned against actual weight per material, deviation %, batching tolerance check, bags and weights. Each material's lot is matched to its QC test; lots on hold, rejected or never tested are flagged. A test page shows every production record that used its lot. |
-| Imports and plant API | CSV import of production records (template included), and a token-protected JSON API for the plant control system. |
-| Reports | Material test report (PDF), batch traceability certificate (PDF), QC register and production log (Excel) for any date range. |
-| AI review | Claude reads the records for a chosen period and summarises out-of-limit results, repeated issues, open decisions and data gaps. It is instructed to use only those records. Reviews are saved. Optional; needs a Claude API key. |
+| Setup | Plant settings (company, plant, batching tolerance, product lines, shifts), materials (with stock unit and reorder level), test parameters with limits and method reference, recipes, customers and sites, vehicles, concrete grades with acceptance values. Nothing is pre-filled: all limits, tolerances and acceptance values come from your specifications. |
+| Material QC | Test per lot: each value marked within limits or out of limit. Decision: Accepted, On hold or Rejected. An out-of-limit lot can only be accepted with a written remark. Limits are copied onto the test, so later changes in Setup never rewrite past tests. |
+| Production log | Planned against actual weight per material, deviation %, tolerance check, bags and weights. Each material's lot is matched to its QC test; lots on hold, rejected or never tested are flagged. |
+| Orders and dispatch | Customer orders per site and grade. Each dispatch loads bags from production records (never more than are in stock), records the truck, mixer on wheels and driver, then delivery, receiver and volume placed. Bags from flagged records need a remark. Delivery note PDF lists the bags and the material lots in them. |
+| Strength tests | Specimens cast from a delivery, test ages, results by age. Strength is calculated from failure load and specimen size (cube side² or cylinder π·d²/4) or entered directly. Results are checked against the grade's acceptance age, minimum individual and minimum mean, as entered in Setup. Tests due and overdue are listed. Strength report PDF. |
+| Stock | Raw material per lot = received on QC tests − used in production ± adjustments, converted to the material's stock unit (kg/t, L/mL). Usable stock counts accepted lots only; reorder alerts. Filled bags in stock per production record. |
+| NCR | Raised from any test, production record, dispatch or strength sample, or on its own. Containment, root cause, corrective action, owner, due date, verification; cannot be closed without root cause, action and verification. Overdue NCRs are flagged. |
+| Equipment | Calibration register with history, certificates and next due date (worked out from the interval if not entered). Due within 30 days and overdue items are flagged. |
+| Reports | PDFs: material test report, batch traceability certificate, delivery note, strength test report. Excel: QC register, production log, dispatch register, strength register, NCR register, stock by lot, equipment calibration status. |
+| Imports and plant API | CSV import of production records, and a token-protected JSON API for the plant control system. |
+| AI review | Claude reads the records for a chosen period (QC, production, dispatch, strength, NCRs) and summarises problems, repeated issues, open decisions and data gaps, using only those records. Optional; needs a Claude API key. |
 | Audit trail | Every sign-in and every change, with who and when. |
 
-## Install with Docker (recommended)
+## Install on a Windows PC (without Docker)
+
+1. Install **Python 3.11 or newer** from python.org. In the installer, tick **Add python.exe to PATH**.
+2. Download this repository (on GitHub: **Code → Download ZIP**) and unzip it, for example to `C:\PlantQC`.
+3. Double-click **`windows\install.bat`**. It sets up the app and opens the settings file `.env` in Notepad.
+   Set `INITIAL_ADMIN_PASSWORD` (10+ characters, upper and lower case letters, a digit), save and close Notepad.
+4. Double-click **`windows\start.bat`** and open `http://127.0.0.1:8000` in a browser.
+   Sign in as `admin` with that password and set your own password when asked.
+5. To back up, double-click **`windows\backup.bat`** and copy `data\backups` to another drive regularly.
+
+The app runs while the `start.bat` window is open. To let other computers on the plant network use it,
+set `HOST=0.0.0.0` in `.env`, restart, and allow Python through Windows Firewall when Windows asks.
+Others then open `http://<this PC's IP address>:8000`.
+
+## Install with Docker (server or cloud)
 
 You need Docker installed on the machine that will run the app
 (Docker Desktop on Windows or macOS, Docker Engine on Linux).
@@ -40,9 +59,11 @@ Open `http://<machine-address>:8000` in a browser, sign in as `admin` with that 
 own password when asked. Then work through **Overview → Getting the plant ready**:
 
 1. **Setup → Plant settings**: company name, plant name, batching tolerance, product lines, shifts.
-2. **Setup → Materials**: each material you receive.
+2. **Setup → Materials**: each material you receive, with its stock unit and reorder level.
 3. **Setup → Test parameters**: each test per material with limits from your specification.
-4. **Users**: an account for each person. The one-time password is shown once.
+4. **Setup → Customers, vehicles and grades**: customers and sites, trucks and mixer-on-wheels units, concrete grades with acceptance values from your specification.
+5. **Equipment**: each item that needs calibration, with its interval.
+6. **Users**: an account for each person. The one-time password is shown once.
 
 Data is kept in the Docker volume `plantqc-data`, so it survives restarts and updates.
 
@@ -56,7 +77,7 @@ docker compose up -d --build
 ### Back up
 
 ```sh
-docker compose exec plantqc sh scripts/backup.sh
+docker compose exec plantqc python scripts/backup.py
 docker compose cp plantqc:/data/backups ./backups
 ```
 
@@ -113,6 +134,7 @@ app/
   models.py        database tables
   logic.py         QC and production rules (limits, deviation, tolerance)
   services.py      saving tests and production records, lot lookup, dashboard
+  operations.py    orders, dispatch, strength tests, stock, NCRs, equipment
   security.py      passwords, sessions, CSRF, role permissions
   reports.py       PDF and Excel output
   ai.py            Claude API review
@@ -120,5 +142,6 @@ app/
   templates/       HTML pages
   static/          stylesheet and script
 tests/             automated tests (pytest)
-scripts/backup.sh  database backup
+scripts/backup.py  database backup (scripts/backup.sh for Docker)
+windows/           install, start and backup for Windows
 ```

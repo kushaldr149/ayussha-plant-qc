@@ -94,3 +94,71 @@ PRODUCTION_LABELS = {
     "notol": "Tolerance not set",
     "nodata": "No planned values",
 }
+
+
+# ---------------------------------------------------------------- units
+
+_UNIT_FACTORS = {
+    "kg": ("mass", 1.0), "t": ("mass", 1000.0),
+    "l": ("volume", 1.0), "ml": ("volume", 0.001),
+}
+
+
+def convert(quantity: float | None, from_unit: str, to_unit: str) -> float | None:
+    """Convert between kg/t and L/mL. Same unit returns the quantity. Anything else returns None."""
+    if quantity is None:
+        return None
+    f, t = (from_unit or "").strip(), (to_unit or "").strip()
+    if f.lower() == t.lower():
+        return quantity
+    a, b = _UNIT_FACTORS.get(f.lower()), _UNIT_FACTORS.get(t.lower())
+    if not a or not b or a[0] != b[0]:
+        return None
+    return quantity * a[1] / b[1]
+
+
+# ---------------------------------------------------------------- strength
+
+import math  # noqa: E402
+
+
+def loaded_area_mm2(specimen_type: str, size_mm: float | None) -> float | None:
+    """Loaded area: side² for a cube, π·d²/4 for a cylinder (size = side or diameter in mm)."""
+    if not size_mm or size_mm <= 0:
+        return None
+    if (specimen_type or "").lower() == "cylinder":
+        return math.pi * size_mm ** 2 / 4.0
+    return size_mm ** 2
+
+
+def strength_from_load(load_kn: float | None, area_mm2: float | None) -> float | None:
+    """Compressive strength in N/mm² (= MPa) from failure load in kN and loaded area in mm²."""
+    if load_kn is None or not area_mm2:
+        return None
+    return load_kn * 1000.0 / area_mm2
+
+
+def strength_group(values: list[float], min_individual: float | None, min_mean: float | None) -> dict:
+    """Summary of one age group and its check against the grade's acceptance values (if given)."""
+    if not values:
+        return {"n": 0, "mean": None, "min": None, "max": None, "status": "pending", "checks": []}
+    mean = sum(values) / len(values)
+    checks = []
+    if min_mean is not None:
+        checks.append(("Mean", mean >= min_mean, f"{mean:.2f} MPa, required ≥ {min_mean:g} MPa"))
+    if min_individual is not None:
+        low = min(values)
+        checks.append(("Lowest individual", low >= min_individual, f"{low:.2f} MPa, required ≥ {min_individual:g} MPa"))
+    if not checks:
+        status = "noref"
+    else:
+        status = "pass" if all(ok for _, ok, _ in checks) else "fail"
+    return {"n": len(values), "mean": mean, "min": min(values), "max": max(values), "status": status, "checks": checks}
+
+
+STRENGTH_LABELS = {
+    "pass": "Meets acceptance values",
+    "fail": "Below acceptance values",
+    "noref": "No acceptance values for this age",
+    "pending": "Not tested yet",
+}

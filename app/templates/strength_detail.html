@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ s.sample_no }}{% endblock %}
+{% block content %}
+{% set SCLS = {"pass": "pass", "fail": "fail", "noref": "info", "pending": "hold"} %}
+{% set v = form if form else {} %}
+<div class="toolbar">
+  <div><p class="muted mono" style="margin:0">{{ s.sample_no }}</p><h1>{{ s.grade.name if s.grade else "Grade not set" }} · cast {{ s.cast_date|d }}</h1></div>
+  <div class="row">
+    <a class="btn" href="/strength/{{ s.id }}/report.pdf" target="_blank" rel="noopener">Test report (PDF)</a>
+    {% if can("ncr.raise") %}<a class="btn" href="/ncr/new?cube_sample_id={{ s.id }}&amp;source=Strength+test">Raise NCR</a>{% endif %}
+    <a class="btn ghost" href="/strength">All samples</a>
+  </div>
+</div>
+<div class="grid2">
+  <div class="panel"><dl class="kv">
+    <dt>Delivery</dt><dd>{% if s.dispatch %}<a class="mono" href="/dispatch/{{ s.dispatch.id }}">{{ s.dispatch.dispatch_no }}</a> · {{ s.dispatch.order.customer.name }}{% else %}—{% endif %}</dd>
+    <dt>Cast at</dt><dd>{{ s.cast_location or "—" }}</dd>
+    <dt>Specimen</dt><dd>{{ s.specimen_type }}{% if s.specimen_size_mm %}, {{ s.specimen_size_mm|num }} mm{% endif %}</dd>
+    <dt>Test ages</dt><dd class="mono">{{ s.test_ages or "—" }}</dd>
+    <dt>Specimens per age</dt><dd>{{ s.specimens_per_age or "—" }}</dd>
+    <dt>Recorded by</dt><dd>{{ s.created_by.display if s.created_by else "—" }}</dd>
+    {% if s.fresh_notes %}<dt>Fresh concrete</dt><dd style="white-space:pre-wrap">{{ s.fresh_notes }}</dd>{% endif %}
+    {% if s.remarks %}<dt>Remarks</dt><dd style="white-space:pre-wrap">{{ s.remarks }}</dd>{% endif %}
+  </dl></div>
+  <div class="panel">
+    <div class="panel-head"><h2>Acceptance check</h2><span class="chip {{ SCLS[summary.status] }}">{{ STRENGTH[summary.status] }}</span></div>
+    {% if s.grade %}
+    <dl class="kv">
+      <dt>Grade</dt><dd>{{ s.grade.name }}</dd>
+      <dt>Acceptance age</dt><dd>{{ s.grade.acceptance_age_days ~ " days" if s.grade.acceptance_age_days else "Not set" }}</dd>
+      <dt>Min. individual</dt><dd class="mono">{% if s.grade.min_individual_mpa is not none %}≥ {{ s.grade.min_individual_mpa|num }} MPa{% else %}Not set{% endif %}</dd>
+      <dt>Min. mean</dt><dd class="mono">{% if s.grade.min_mean_mpa is not none %}≥ {{ s.grade.min_mean_mpa|num }} MPa{% else %}Not set{% endif %}</dd>
+      {% if s.grade.reference %}<dt>Reference</dt><dd>{{ s.grade.reference }}</dd>{% endif %}
+    </dl>
+    {% else %}<p class="muted" style="margin:0">No grade is linked, so results are not checked.</p>{% endif %}
+  </div>
+</div>
+
+{% for g in summary.groups %}
+<div class="panel">
+  <div class="panel-head"><h2>{{ g.age }}-day results{% if g.acceptance %} <span class="muted small">(acceptance age)</span>{% endif %}</h2>
+    <span>{% if g.results %}<span class="mono">mean {{ "%.2f"|format(g.mean) }} MPa · lowest {{ "%.2f"|format(g.min) }} · n={{ g.n }}</span> <span class="chip {{ SCLS[g.status] }}">{{ STRENGTH[g.status] }}</span>{% else %}<span class="chip hold">Due {{ g.due|d }}</span>{% endif %}</span></div>
+  {% if g.results %}
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Specimen</th><th>Test date</th><th class="num">Actual age</th><th class="num">Mass (kg)</th><th class="num">Load (kN)</th><th class="num">Strength (MPa)</th>{% if can("records.delete") %}<th></th>{% endif %}</tr></thead>
+    <tbody>{% for r in g.results %}
+      <tr><td class="mono">{{ r.specimen_no }}</td><td>{{ r.test_date|d }}</td><td class="num">{{ (r.test_date - s.cast_date).days }} d</td><td class="num mono">{{ r.mass_kg|num if r.mass_kg is not none else "—" }}</td><td class="num mono">{{ r.load_kn|num(2) if r.load_kn is not none else "—" }}</td><td class="num mono">{{ "%.2f"|format(r.strength_mpa) }}</td>
+        {% if can("records.delete") %}<td><form class="inline" method="post" action="/strength/{{ s.id }}/results/{{ r.id }}/delete" data-confirm><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="linkbtn" type="submit" data-label="Delete">Delete</button><span data-note></span></form></td>{% endif %}</tr>
+    {% endfor %}</tbody></table></div>
+  {% for name, ok, text in g.checks %}<p class="small {{ '' if ok else 'bad' }}" style="margin:6px 0 0">{{ name }} {{ text }}: {{ "meets" if ok else "below" }}</p>{% endfor %}
+  {% endif %}
+</div>
+{% else %}
+<div class="panel"><p class="muted" style="margin:0">No test ages were entered and no results recorded yet.</p></div>
+{% endfor %}
+
+{% if can("strength.write") %}
+<form class="panel stack" method="post" action="/strength/{{ s.id }}/results" id="results-form">
+  <h2>Enter results</h2>
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f"><span>Age (days)</span><input name="age_days" id="r_age" inputmode="numeric" class="mono" required value="{{ v.get('age_days', '') }}"></label>
+    <label class="f"><span>Test date</span><input type="date" name="test_date" id="r_date" required value="{{ v.get('test_date') or today }}"></label>
+  </div>
+  <p class="muted small" style="margin:0">{% if s.specimen_size_mm %}Enter the failure load; strength is calculated as load ÷ {{ "π·d²/4" if s.specimen_type == "Cylinder" else "side²" }} ({{ s.specimen_size_mm|num }} mm). Or enter the strength directly.{% else %}The specimen size is not recorded, so enter the strength directly.{% endif %}</p>
+  <div class="comp-head res" aria-hidden="true"><span>Specimen</span><span>Mass (kg)</span><span>Load (kN)</span><span>Strength (MPa)</span></div>
+  <div class="comps">
+    {% for row in rows %}
+    <div class="comp res">
+      <input name="r-{{ loop.index0 }}-specimen_no" class="mono" aria-label="Specimen number" value="{{ row.get('specimen_no', loop.index) }}">
+      <input name="r-{{ loop.index0 }}-mass_kg" class="mono" inputmode="decimal" aria-label="Mass in kg" placeholder="Mass" value="{{ row.get('mass_kg', '') }}">
+      <input name="r-{{ loop.index0 }}-load_kn" class="mono" inputmode="decimal" aria-label="Failure load in kN" placeholder="Load" value="{{ row.get('load_kn', '') }}">
+      <input name="r-{{ loop.index0 }}-strength_mpa" class="mono" inputmode="decimal" aria-label="Strength in MPa" placeholder="Strength" value="{{ row.get('strength_mpa', '') }}">
+    </div>
+    {% endfor %}
+  </div>
+  <div class="actions"><button class="btn primary" type="submit">Save results</button></div>
+</form>
+{% endif %}
+{% if ncrs %}<div class="panel"><h2>NCRs</h2><ul class="alist">{% for n in ncrs %}<li><a href="/ncr/{{ n.id }}"><span class="mono">{{ n.ncr_no }}</span><span class="t">{{ n.title }}</span><span class="d">{{ n.status }}</span></a></li>{% endfor %}</ul></div>{% endif %}
+{% endblock %}

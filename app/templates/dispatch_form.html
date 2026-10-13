@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}New dispatch{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><h1>New dispatch</h1><p class="muted">Load bags from production records that still have bags in stock. Records flagged for lots not accepted or over tolerance need a remark.</p></div></div>
+<script type="application/json" id="stock-payload">{{ stock_json|tojson }}</script>
+<script type="application/json" id="items-initial">{{ items|tojson }}</script>
+<form class="panel stack" method="post" action="/dispatch/new" id="dispatch-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f"><span>Dispatch date</span><input type="date" name="dispatch_date" id="d_date" required value="{{ v.get('dispatch_date') or today }}"></label>
+    <label class="f wide"><span>Order</span><select name="order_id" id="d_order" required><option value="">Select order</option>{% for o in orders %}<option value="{{ o.id }}" {% if v.get('order_id') == o.id|string %}selected{% endif %}>{{ o.order_no }} · {{ o.customer.name }}{% if o.site %} · {{ o.site.name }}{% endif %}{% if o.grade %} · {{ o.grade.name }}{% endif %}</option>{% endfor %}</select></label>
+    <label class="f"><span>Truck</span><select name="truck_id" id="d_truck"><option value="">Not recorded</option>{% for t in trucks %}<option value="{{ t.id }}" {% if v.get('truck_id') == t.id|string %}selected{% endif %}>{{ t.reg_no }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Mixer on wheels</span><select name="mixer_id" id="d_mixer"><option value="">Not recorded</option>{% for m in mixers %}<option value="{{ m.id }}" {% if v.get('mixer_id') == m.id|string %}selected{% endif %}>{{ m.reg_no }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Driver</span><input name="driver_name" id="d_driver" value="{{ v.get('driver_name', '') }}"></label>
+    <label class="f"><span>Driver phone</span><input name="driver_phone" id="d_phone" value="{{ v.get('driver_phone', '') }}"></label>
+    <label class="f"><span>Planned volume at site (m³)</span><input name="planned_m3" id="d_m3" inputmode="decimal" class="mono" value="{{ v.get('planned_m3', '') }}"></label>
+    <label class="f"><span>Departure time</span><input type="datetime-local" name="departed_at" id="d_dep" value="{{ v.get('departed_at', '') }}"><span class="hint">Now, if left empty.</span></label>
+  </div>
+  <div>
+    <div class="panel-head" style="margin-bottom:8px"><h2>Bags loaded</h2><span class="muted small">Only production records with bags still in stock are listed.</span></div>
+    <div class="comp-head disp" aria-hidden="true"><span>Production record</span><span>Bags</span><span>In stock</span></div>
+    <div class="comps" id="d_items"></div>
+    <div style="margin-top:10px"><button type="button" class="btn" id="d_add">Add line</button></div>
+  </div>
+  <label class="f"><span>Remarks</span><textarea name="remarks" id="d_rem" rows="2">{{ v.get('remarks', '') }}</textarea></label>
+  <div class="actions"><a class="btn" href="/dispatch">Cancel</a><button class="btn primary" type="submit">Save dispatch</button></div>
+</form>
+{% endblock %}

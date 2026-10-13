@@ -19,13 +19,16 @@ Rules:
 - Do not recommend accepting or rejecting a lot; list what needs a decision and why.
 - Plain text. Short headings followed by short lines. No tables.
 
-Sections:
-1. Summary: counts of material tests, out-of-limit tests, lots on hold, production records, records over tolerance.
+Sections (skip a section if its data is empty):
+1. Summary: counts of material tests, out-of-limit tests, lots on hold, production records, records over tolerance, dispatches, strength samples, open NCRs.
 2. Out-of-limit results, grouped by material and supplier, with the parameter, value and limit.
 3. Repeated issues: the same material, supplier or parameter out of limit more than once.
 4. Production records over tolerance, or using lots that were not accepted or had no QC record.
 5. Open decisions: lots on hold.
-6. Data gaps: tests with values not entered, production records without planned values or lot numbers.
+6. Dispatch: deliveries still on the road, returned or cancelled trips, and bags dispatched from flagged production records.
+7. Strength tests: results below the acceptance values entered for the grade, and samples with no acceptance values.
+8. NCRs: open and overdue NCRs, and repeated sources.
+9. Data gaps: tests with values not entered, production records without planned values or lot numbers.
 
 Data (JSON):
 """

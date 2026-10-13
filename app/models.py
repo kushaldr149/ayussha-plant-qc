@@ -90,6 +90,9 @@ class Material(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # Stock is kept in this unit; quantities in other units of the same kind are converted (kg/t, mL/L).
+    stock_unit: Mapped[str | None] = mapped_column(String(20), nullable=True, default="kg")
+    reorder_level: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     parameters: Mapped[list["QCParameter"]] = relationship(
         back_populates="material", order_by="QCParameter.sort_order, QCParameter.name"
@@ -252,3 +255,270 @@ class AIReview(Base):
     summary: Mapped[str] = mapped_column(Text)
 
     created_by: Mapped[User] = relationship()
+
+
+# ================================================================ dispatch
+
+DELIVERY_STATUSES = ["Dispatched", "Delivered", "Returned", "Cancelled"]
+ORDER_STATUSES = ["Open", "Closed", "Cancelled"]
+VEHICLE_TYPES = ["Truck", "Mixer on wheels", "Other"]
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), unique=True)
+    contact_person: Mapped[str] = mapped_column(String(120), default="")
+    phone: Mapped[str] = mapped_column(String(40), default="")
+    email: Mapped[str] = mapped_column(String(160), default="")
+    address: Mapped[str] = mapped_column(Text, default="")
+    gstin: Mapped[str] = mapped_column(String(30), default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    sites: Mapped[list["Site"]] = relationship(back_populates="customer", order_by="Site.name")
+
+
+class Site(Base):
+    __tablename__ = "sites"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    address: Mapped[str] = mapped_column(Text, default="")
+    contact_person: Mapped[str] = mapped_column(String(120), default="")
+    phone: Mapped[str] = mapped_column(String(40), default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    customer: Mapped[Customer] = relationship(back_populates="sites")
+    __table_args__ = (UniqueConstraint("customer_id", "name", name="uq_site_customer_name"),)
+
+
+class Vehicle(Base):
+    __tablename__ = "vehicles"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reg_no: Mapped[str] = mapped_column(String(40), unique=True)
+    vehicle_type: Mapped[str] = mapped_column(String(40))
+    description: Mapped[str] = mapped_column(String(200), default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class ConcreteGrade(Base):
+    """Concrete grade with acceptance values entered from the specification. All values optional."""
+    __tablename__ = "concrete_grades"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(60), unique=True)
+    specified_strength_mpa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    acceptance_age_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    min_individual_mpa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    min_mean_mpa: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reference: Mapped[str] = mapped_column(String(240), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Order(Base):
+    __tablename__ = "orders"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_no: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    order_date: Mapped[date] = mapped_column(Date)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id"), nullable=True)
+    grade_id: Mapped[int | None] = mapped_column(ForeignKey("concrete_grades.id"), nullable=True)
+    quantity_m3: Mapped[float | None] = mapped_column(Float, nullable=True)
+    required_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    customer_ref: Mapped[str] = mapped_column(String(80), default="")
+    status: Mapped[str] = mapped_column(String(20), default="Open", index=True)
+    remarks: Mapped[str] = mapped_column(Text, default="")
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    customer: Mapped[Customer] = relationship()
+    site: Mapped[Site | None] = relationship()
+    grade: Mapped[ConcreteGrade | None] = relationship()
+    dispatches: Mapped[list["Dispatch"]] = relationship(back_populates="order", order_by="Dispatch.dispatch_date")
+
+
+class Dispatch(Base):
+    __tablename__ = "dispatches"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dispatch_no: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    dispatch_date: Mapped[date] = mapped_column(Date, index=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    truck_id: Mapped[int | None] = mapped_column(ForeignKey("vehicles.id"), nullable=True)
+    mixer_id: Mapped[int | None] = mapped_column(ForeignKey("vehicles.id"), nullable=True)
+    driver_name: Mapped[str] = mapped_column(String(120), default="")
+    driver_phone: Mapped[str] = mapped_column(String(40), default="")
+    planned_m3: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="Dispatched", index=True)
+    departed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    received_by: Mapped[str] = mapped_column(String(120), default="")
+    delivered_m3: Mapped[float | None] = mapped_column(Float, nullable=True)
+    remarks: Mapped[str] = mapped_column(Text, default="")
+    delivery_remarks: Mapped[str] = mapped_column(Text, default="")
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    delivered_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    order: Mapped[Order] = relationship(back_populates="dispatches")
+    truck: Mapped[Vehicle | None] = relationship(foreign_keys=[truck_id])
+    mixer: Mapped[Vehicle | None] = relationship(foreign_keys=[mixer_id])
+    items: Mapped[list["DispatchItem"]] = relationship(back_populates="dispatch", cascade="all, delete-orphan",
+                                                       order_by="DispatchItem.id")
+    created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_id])
+
+
+class DispatchItem(Base):
+    """Bags from one production record loaded on one dispatch."""
+    __tablename__ = "dispatch_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dispatch_id: Mapped[int] = mapped_column(ForeignKey("dispatches.id", ondelete="CASCADE"), index=True)
+    production_id: Mapped[int] = mapped_column(ForeignKey("production_records.id"), index=True)
+    bags: Mapped[int] = mapped_column(Integer)
+
+    dispatch: Mapped[Dispatch] = relationship(back_populates="items")
+    production: Mapped[ProductionRecord] = relationship()
+
+
+# ================================================================ strength tests
+
+class CubeSample(Base):
+    """Specimens cast from one delivery (or at the plant), tested at one or more ages."""
+    __tablename__ = "cube_samples"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sample_no: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    dispatch_id: Mapped[int | None] = mapped_column(ForeignKey("dispatches.id"), nullable=True, index=True)
+    grade_id: Mapped[int | None] = mapped_column(ForeignKey("concrete_grades.id"), nullable=True)
+    cast_date: Mapped[date] = mapped_column(Date, index=True)
+    cast_location: Mapped[str] = mapped_column(String(120), default="")
+    specimen_type: Mapped[str] = mapped_column(String(40), default="Cube")
+    specimen_size_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    test_ages: Mapped[str] = mapped_column(String(60), default="")  # e.g. "7,28" as entered
+    specimens_per_age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fresh_notes: Mapped[str] = mapped_column(Text, default="")
+    remarks: Mapped[str] = mapped_column(Text, default="")
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    dispatch: Mapped[Dispatch | None] = relationship()
+    grade: Mapped[ConcreteGrade | None] = relationship()
+    results: Mapped[list["CubeResult"]] = relationship(back_populates="sample", cascade="all, delete-orphan",
+                                                       order_by="CubeResult.age_days, CubeResult.specimen_no")
+    created_by: Mapped[User | None] = relationship()
+
+    @property
+    def age_list(self) -> list[int]:
+        out = []
+        for part in (self.test_ages or "").replace(";", ",").split(","):
+            part = part.strip()
+            if part.isdigit() and int(part) > 0:
+                out.append(int(part))
+        return sorted(set(out))
+
+
+class CubeResult(Base):
+    __tablename__ = "cube_results"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sample_id: Mapped[int] = mapped_column(ForeignKey("cube_samples.id", ondelete="CASCADE"), index=True)
+    age_days: Mapped[int] = mapped_column(Integer)
+    test_date: Mapped[date] = mapped_column(Date)
+    specimen_no: Mapped[str] = mapped_column(String(20), default="")
+    mass_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    load_kn: Mapped[float | None] = mapped_column(Float, nullable=True)
+    strength_mpa: Mapped[float] = mapped_column(Float)
+    tested_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    sample: Mapped[CubeSample] = relationship(back_populates="results")
+
+
+# ================================================================ stock
+
+class StockAdjustment(Base):
+    """Manual stock correction (e.g. after a physical count). Positive adds, negative removes."""
+    __tablename__ = "stock_adjustments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    adj_date: Mapped[date] = mapped_column(Date)
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id"), index=True)
+    lot_no: Mapped[str] = mapped_column(String(80), default="")
+    quantity: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(20))
+    reason: Mapped[str] = mapped_column(Text)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    material: Mapped[Material] = relationship()
+    created_by: Mapped[User | None] = relationship()
+
+
+# ================================================================ NCR and equipment
+
+NCR_SOURCES = ["Material QC", "Production", "Dispatch", "Strength test", "Customer complaint", "Internal audit", "Other"]
+NCR_STATUSES = ["Open", "Action in progress", "Closed"]
+CAL_RESULTS = ["Within limits", "Adjusted", "Out of limits"]
+
+
+class NCR(Base):
+    __tablename__ = "ncrs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ncr_no: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    raised_date: Mapped[date] = mapped_column(Date, index=True)
+    source: Mapped[str] = mapped_column(String(40))
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text)
+    qc_test_id: Mapped[int | None] = mapped_column(ForeignKey("qc_tests.id"), nullable=True)
+    production_id: Mapped[int | None] = mapped_column(ForeignKey("production_records.id"), nullable=True)
+    dispatch_id: Mapped[int | None] = mapped_column(ForeignKey("dispatches.id"), nullable=True)
+    cube_sample_id: Mapped[int | None] = mapped_column(ForeignKey("cube_samples.id"), nullable=True)
+    containment: Mapped[str] = mapped_column(Text, default="")
+    root_cause: Mapped[str] = mapped_column(Text, default="")
+    corrective_action: Mapped[str] = mapped_column(Text, default="")
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="Open", index=True)
+    verification: Mapped[str] = mapped_column(Text, default="")
+    closed_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    closed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    raised_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    owner: Mapped[User | None] = relationship(foreign_keys=[owner_id])
+    raised_by: Mapped[User | None] = relationship(foreign_keys=[raised_by_id])
+    closed_by: Mapped[User | None] = relationship(foreign_keys=[closed_by_id])
+    qc_test: Mapped[QCTest | None] = relationship()
+    production: Mapped[ProductionRecord | None] = relationship()
+    dispatch: Mapped[Dispatch | None] = relationship()
+    cube_sample: Mapped[CubeSample | None] = relationship()
+
+
+class Equipment(Base):
+    __tablename__ = "equipment"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tag: Mapped[str] = mapped_column(String(40), unique=True)
+    name: Mapped[str] = mapped_column(String(160))
+    location: Mapped[str] = mapped_column(String(120), default="")
+    make_model: Mapped[str] = mapped_column(String(160), default="")
+    serial_no: Mapped[str] = mapped_column(String(80), default="")
+    range_text: Mapped[str] = mapped_column(String(120), default="")
+    interval_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    next_due: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(30), default="In use")
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+    calibrations: Mapped[list["Calibration"]] = relationship(back_populates="equipment", cascade="all, delete-orphan",
+                                                             order_by="Calibration.cal_date.desc()")
+
+
+class Calibration(Base):
+    __tablename__ = "calibrations"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    equipment_id: Mapped[int] = mapped_column(ForeignKey("equipment.id", ondelete="CASCADE"), index=True)
+    cal_date: Mapped[date] = mapped_column(Date)
+    agency: Mapped[str] = mapped_column(String(160), default="")
+    certificate_no: Mapped[str] = mapped_column(String(80), default="")
+    result: Mapped[str] = mapped_column(String(30))
+    next_due: Mapped[date | None] = mapped_column(Date, nullable=True)
+    remarks: Mapped[str] = mapped_column(Text, default="")
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    equipment: Mapped[Equipment] = relationship(back_populates="calibrations")

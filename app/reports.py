@@ -306,3 +306,121 @@ def production_excel(records: list[ProductionRecord]) -> bytes:
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
+
+
+# ================================================================ dispatch and strength documents
+
+def _dt_local(value) -> str:
+    if not value:
+        return "—"
+    from datetime import timezone as _tz
+    return value.replace(tzinfo=_tz.utc).astimezone(config.TZ).strftime("%d %b %Y %H:%M")
+
+
+def delivery_note_pdf(disp, settings: PlantSettings) -> bytes:
+    st = _styles()
+    order = disp.order
+    story = _header(settings, "Delivery Note", disp.dispatch_no, st)
+    site_addr = order.site.address.replace("\n", ", ") if order.site and order.site.address else ""
+    story.append(_kv_table([
+        ("Dispatch date", disp.dispatch_date.strftime("%d %b %Y")), ("Order no.", order.order_no),
+        ("Customer", order.customer.name), ("Customer ref.", order.customer_ref or "—"),
+        ("Site", order.site.name if order.site else "—"), ("Site address", site_addr or "—"),
+        ("Concrete grade", order.grade.name if order.grade else "—"),
+        ("Planned volume", f"{_num(disp.planned_m3)} m³" if disp.planned_m3 is not None else "—"),
+        ("Truck", disp.truck.reg_no if disp.truck else "—"), ("Mixer on wheels", disp.mixer.reg_no if disp.mixer else "—"),
+        ("Driver", (disp.driver_name or "—") + (f" · {disp.driver_phone}" if disp.driver_phone else "")),
+        ("Departed", _dt_local(disp.departed_at)),
+    ], st))
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph("Bags loaded", st["h"]))
+    data = [[Paragraph(_t(h), st["cellb"]) for h in ("Production record", "Production date", "Product line", "Bags")]]
+    total = 0
+    for it in disp.items:
+        p = it.production
+        total += it.bags
+        data.append([Paragraph(_t(p.record_no), st["cell"]), Paragraph(_t(p.prod_date.strftime("%d %b %Y")), st["cell"]),
+                     Paragraph(_t(p.product_line), st["cell"]), Paragraph(_t(str(it.bags)), st["cell"])])
+    data.append([Paragraph("Total", st["cellb"]), "", "", Paragraph(_t(str(total)), st["cellb"])])
+    story.append(_grid(data, [50 * mm, 35 * mm, 70 * mm, 25 * mm], st, right_cols=(3,)))
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph("Material lots in these bags", st["h"]))
+    lots = [[Paragraph(_t(h), st["cellb"]) for h in ("Production record", "Material", "Lot no.", "Lot QC decision")]]
+    for it in disp.items:
+        for c in it.production.components:
+            lots.append([Paragraph(_t(it.production.record_no), st["cell"]), Paragraph(_t(c.material_name), st["cell"]),
+                         Paragraph(_t(c.lot_no or "—"), st["cell"]), Paragraph(_t(c.lot_decision or "—"), st["cell"])])
+    story.append(_grid(lots, [45 * mm, 60 * mm, 40 * mm, 35 * mm], st))
+    if disp.remarks:
+        story.append(Paragraph("Remarks", st["h"]))
+        story.append(Paragraph(_t(disp.remarks).replace("\n", "<br/>"), st["body"]))
+    if disp.status == "Delivered":
+        story.append(Spacer(1, 4 * mm))
+        story.append(_kv_table([
+            ("Delivered at", _dt_local(disp.delivered_at)), ("Received by", disp.received_by or "—"),
+            ("Volume placed", f"{_num(disp.delivered_m3)} m³" if disp.delivered_m3 is not None else "—"),
+            ("Delivery remarks", disp.delivery_remarks or "—"),
+        ], st))
+    story.append(Spacer(1, 22 * mm))
+    story.append(_signatures(["Dispatched by (plant)", "Driver", "Received by (site): name, signature, date"], st))
+    return _build(story, f"Delivery Note {disp.dispatch_no}", f"{config.APP_NAME} · {disp.dispatch_no} · generated {_generated()}")
+
+
+def strength_report_pdf(sample, summary: dict, settings: PlantSettings) -> bytes:
+    st = _styles()
+    story = _header(settings, "Concrete Strength Test Report", sample.sample_no, st)
+    disp = sample.dispatch
+    grade = sample.grade
+    story.append(_kv_table([
+        ("Casting date", sample.cast_date.strftime("%d %b %Y")), ("Cast at", sample.cast_location or "—"),
+        ("Grade", grade.name if grade else "—"),
+        ("Specimen", f"{sample.specimen_type}" + (f", {_num(sample.specimen_size_mm)} mm" if sample.specimen_size_mm else "")),
+        ("Customer", disp.order.customer.name if disp else "—"), ("Site", disp.order.site.name if disp and disp.order.site else "—"),
+        ("Dispatch no.", disp.dispatch_no if disp else "—"), ("Order no.", disp.order.order_no if disp else "—"),
+    ], st))
+    if sample.fresh_notes:
+        story.append(Paragraph("Fresh concrete", st["h"]))
+        story.append(Paragraph(_t(sample.fresh_notes).replace("\n", "<br/>"), st["body"]))
+    for g in summary["groups"]:
+        story.append(Paragraph(_t(f"{g['age']}-day results" + (" (acceptance age)" if g["acceptance"] else "")), st["h"]))
+        if not g["results"]:
+            story.append(Paragraph(_t(f"Not tested yet. Due {g['due']:%d %b %Y}."), st["body"]))
+            continue
+        data = [[Paragraph(_t(h), st["cellb"]) for h in ("Specimen", "Test date", "Actual age", "Mass (kg)", "Load (kN)", "Strength (MPa)")]]
+        for r in g["results"]:
+            data.append([Paragraph(_t(r.specimen_no), st["cell"]), Paragraph(_t(r.test_date.strftime("%d %b %Y")), st["cell"]),
+                         Paragraph(_t(f"{(r.test_date - sample.cast_date).days} d"), st["cell"]),
+                         Paragraph(_t(_num(r.mass_kg)), st["cell"]), Paragraph(_t(_num(r.load_kn, 2)), st["cell"]),
+                         Paragraph(_t(f"{r.strength_mpa:.2f}"), st["cell"])])
+        story.append(_grid(data, [25 * mm, 30 * mm, 25 * mm, 30 * mm, 30 * mm, 40 * mm], st))
+        line = f"Mean {g['mean']:.2f} MPa · lowest {g['min']:.2f} MPa · {g['n']} specimen(s)"
+        for name, ok, text in g["checks"]:
+            line += f" · {name} {text}: {'meets' if ok else 'below'}"
+        story.append(Paragraph(_t(line), st["small"]))
+    story.append(Spacer(1, 4 * mm))
+    if grade:
+        story.append(_kv_table([
+            ("Acceptance age", f"{grade.acceptance_age_days} days" if grade.acceptance_age_days else "Not set"),
+            ("Min. individual", f"≥ {_num(grade.min_individual_mpa)} MPa" if grade.min_individual_mpa is not None else "Not set"),
+            ("Min. mean", f"≥ {_num(grade.min_mean_mpa)} MPa" if grade.min_mean_mpa is not None else "Not set"),
+            ("Reference", grade.reference or "—"),
+        ], st))
+    story.append(Paragraph(_t("Result: " + logic.STRENGTH_LABELS.get(summary["status"], summary["status"])), st["h"]))
+    story.append(Paragraph(_t("Acceptance values are those entered for the grade in the app. Strength = failure load ÷ loaded area "
+                              "where the load was entered."), st["small"]))
+    story.append(Spacer(1, 18 * mm))
+    story.append(_signatures(["Tested by", "Checked by", "Approved by (Quality)"], st))
+    return _build(story, f"Strength Test Report {sample.sample_no}", f"{config.APP_NAME} · {sample.sample_no} · generated {_generated()}")
+
+
+def table_excel(sheet: str, headers: list[str], rows: list[list], date_cols: tuple[int, ...] = ()) -> bytes:
+    wb = Workbook()
+    wb.remove(wb.active)
+    ws = _sheet(wb, sheet, headers, rows)
+    for col in date_cols:
+        for row in ws.iter_rows(min_row=2, min_col=col, max_col=col):
+            for cell in row:
+                cell.number_format = "dd-mmm-yyyy"
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()

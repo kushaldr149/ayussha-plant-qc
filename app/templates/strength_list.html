@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager %}
+{% block title %}Strength tests{% endblock %}
+{% block content %}
+{% set SCLS = {"pass": "pass", "fail": "fail", "noref": "info", "pending": "hold"} %}
+<div class="toolbar">
+  <div><h1>Concrete strength tests</h1><p class="muted">Specimens cast from deliveries, results by age, and the check against the acceptance values entered for each grade.</p></div>
+  <div class="row">{% if can("reports") %}<a class="btn" href="/reports/strength.xlsx?{{ f|urlencode }}">Export to Excel</a>{% endif %}{% if can("strength.write") %}<a class="btn primary" href="/strength/new">Record specimens cast</a>{% endif %}</div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Tests due</h2><span class="muted small">Overdue, today and the next 7 days</span></div>
+  {% if due %}
+  <ul class="alist">{% for x in due %}<li><a href="/strength/{{ x.sample.id }}"><span class="chip {{ 'fail' if x.overdue else 'hold' }}">{{ "Overdue" if x.overdue else ("Today" if x.due.isoformat() == today else "Due") }}</span><span class="t"><span class="mono">{{ x.sample.sample_no }}</span> · {{ x.age }}-day test</span><span class="d">{{ x.due|d }}</span></a></li>{% endfor %}</ul>
+  {% else %}<p class="muted" style="margin:0">No tests due in the next 7 days.</p>{% endif %}
+</div>
+
+<form class="filters" method="get" action="/strength" data-autosubmit>
+  <label>Grade<select name="grade" id="s-grade"><option value="">All grades</option>{% for g in grades %}<option value="{{ g.id }}" {% if f.grade == g.id|string %}selected{% endif %}>{{ g.name }}</option>{% endfor %}</select></label>
+  <label>Cast from<input type="date" name="from" id="s-from" value="{{ f.get('from', '') }}"></label>
+  <label>To<input type="date" name="to" id="s-to" value="{{ f.get('to', '') }}"></label>
+  <label>Search<input type="search" name="q" id="s-q" value="{{ f.get('q', '') }}" placeholder="Sample, dispatch, location"></label>
+  <button class="btn" type="submit">Apply</button>{% if f %}<a class="btn ghost" href="/strength">Clear</a>{% endif %}
+</form>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Sample no.</th><th>Cast</th><th>Grade</th><th>Customer / dispatch</th><th>Results by age (mean MPa)</th><th>Acceptance check</th></tr></thead>
+  <tbody>
+  {% for s, sm in rows %}
+    <tr><td class="mono nowrap"><a class="rowlink" href="/strength/{{ s.id }}">{{ s.sample_no }}</a></td><td class="nowrap">{{ s.cast_date|d }}</td><td>{{ s.grade.name if s.grade else "—" }}</td>
+      <td>{% if s.dispatch %}{{ s.dispatch.order.customer.name }}<div class="muted small mono">{{ s.dispatch.dispatch_no }}</div>{% else %}{{ s.cast_location or "—" }}{% endif %}</td>
+      <td class="mono small">{% for g in sm.groups %}{{ g.age }} d: {% if g.mean is not none %}{{ "%.2f"|format(g.mean) }} (n={{ g.n }}){% else %}<span class="muted">due {{ g.due|d }}</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</td>
+      <td><span class="chip {{ SCLS[sm.status] }}">{{ STRENGTH[sm.status] }}</span></td></tr>
+  {% else %}
+    <tr><td colspan="6" class="empty"><strong>No samples</strong>{% if f %}No samples match these filters.{% else %}Record the specimens cast at site from a delivery, then enter results as they are tested.{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+<div class="row" style="justify-content:space-between"><span class="muted small">{{ total }} sample{{ "s" if total != 1 }}</span>{{ pager(page, pages, f) }}</div>
+{% endblock %}

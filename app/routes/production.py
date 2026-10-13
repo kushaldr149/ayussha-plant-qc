@@ -184,6 +184,11 @@ def prod_detail(record_id: int, request: Request, db: Session = Depends(get_db),
 @router.post("/{record_id}/delete")
 def prod_delete(record_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("records.delete"))):
     rec = _get(db, record_id)
+    from ..models import NCR, DispatchItem
+    if db.scalar(select(func.count(DispatchItem.id)).where(DispatchItem.production_id == rec.id)) or \
+       db.scalar(select(func.count(NCR.id)).where(NCR.production_id == rec.id)):
+        flash(request, "Bags from this record have been dispatched or an NCR refers to it, so it cannot be deleted.", "error")
+        return redirect(f"/production/{rec.id}")
     audit.record(db, user, "delete", "production", rec.record_no, {"line": rec.product_line, "date": rec.prod_date})
     db.delete(rec)
     db.commit()

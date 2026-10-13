@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit customer" if c else "Add customer" }}{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><h1>{{ "Edit customer" if c else "Add customer" }}</h1></div></div>
+<form class="panel stack" method="post" action="{{ '/setup/customers/%d' % c.id if c else '/setup/customers/new' }}" style="max-width:760px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f wide"><span>Customer name</span><input name="name" id="c_name" required value="{{ v.get('name', c.name if c else '') }}"></label>
+    <label class="f"><span>Contact person</span><input name="contact_person" id="c_contact" value="{{ v.get('contact_person', c.contact_person if c else '') }}"></label>
+    <label class="f"><span>Phone</span><input name="phone" id="c_phone" value="{{ v.get('phone', c.phone if c else '') }}"></label>
+    <label class="f"><span>Email</span><input name="email" id="c_email" type="email" value="{{ v.get('email', c.email if c else '') }}"></label>
+    <label class="f"><span>GSTIN</span><input name="gstin" id="c_gstin" class="mono" value="{{ v.get('gstin', c.gstin if c else '') }}"></label>
+    <label class="f wide"><span>Billing address</span><textarea name="address" id="c_addr" rows="2">{{ v.get('address', c.address if c else '') }}</textarea></label>
+    {% if c %}<label class="check"><input type="checkbox" name="active" id="c_active" {% if c.active %}checked{% endif %}> Active</label>{% endif %}
+  </div>
+  <div class="actions"><a class="btn" href="/setup/masters#customers">Cancel</a><button class="btn primary" type="submit">Save customer</button></div>
+</form>
+{% if c %}<div class="panel" style="max-width:760px"><div class="panel-head"><h2>Sites</h2><a class="btn" href="/setup/sites/new?customer={{ c.id }}">Add site</a></div>
+{% if c.sites %}<ul class="alist">{% for s in c.sites %}<li><a href="/setup/sites/{{ s.id }}"><span>{{ s.name }}</span><span class="t muted">{{ s.address }}</span><span class="d">{{ "Active" if s.active else "Inactive" }}</span></a></li>{% endfor %}</ul>{% else %}<p class="muted" style="margin:0">No sites yet.</p>{% endif %}</div>{% endif %}
+{% endblock %}

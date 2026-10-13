@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager %}
+{% block title %}NCRs{% endblock %}
+{% block content %}
+{% set NCLS = {"Open": "fail", "Action in progress": "hold", "Closed": "pass"} %}
+<div class="toolbar">
+  <div><h1>Non-conformance reports</h1><p class="muted">Each NCR records what went wrong, the immediate containment, the root cause, the corrective action and how it was verified.</p></div>
+  <div class="row">{% if can("reports") %}<a class="btn" href="/reports/ncr.xlsx?{{ f|urlencode }}">Export to Excel</a>{% endif %}{% if can("ncr.raise") %}<a class="btn primary" href="/ncr/new">Raise NCR</a>{% endif %}</div>
+</div>
+<form class="filters" method="get" action="/ncr" data-autosubmit>
+  <label>Status<select name="status" id="n-status"><option value="">All</option><option value="open" {% if f.status == "open" %}selected{% endif %}>Not closed</option>{% for s in statuses %}<option {% if f.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Source<select name="source" id="n-source"><option value="">All sources</option>{% for s in sources %}<option {% if f.source == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Search<input type="search" name="q" id="n-q" value="{{ f.get('q', '') }}" placeholder="NCR no., title, description"></label>
+  <button class="btn" type="submit">Apply</button>{% if f %}<a class="btn ghost" href="/ncr">Clear</a>{% endif %}
+</form>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>NCR no.</th><th>Raised</th><th>Source</th><th>Title</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for n in rows %}
+    {% set overdue = n.status != "Closed" and n.due_date and n.due_date < now %}
+    <tr><td class="mono nowrap"><a class="rowlink" href="/ncr/{{ n.id }}">{{ n.ncr_no }}</a></td><td class="nowrap">{{ n.raised_date|d }}</td><td>{{ n.source }}</td><td>{{ n.title }}</td>
+      <td>{{ n.owner.display if n.owner else "—" }}</td>
+      <td class="nowrap {{ 'bad' if overdue }}">{{ n.due_date|d }}{% if overdue %}<div class="small">Overdue</div>{% endif %}</td>
+      <td><span class="chip {{ NCLS.get(n.status, 'info') }}">{{ n.status }}</span></td></tr>
+  {% else %}
+    <tr><td colspan="7" class="empty"><strong>No NCRs</strong>{% if f %}No NCRs match these filters.{% else %}NCRs can be raised here or directly from a material test, production record, dispatch or strength sample.{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+<div class="row" style="justify-content:space-between"><span class="muted small">{{ total }} NCR{{ "s" if total != 1 }}</span>{{ pager(page, pages, f) }}</div>
+{% endblock %}

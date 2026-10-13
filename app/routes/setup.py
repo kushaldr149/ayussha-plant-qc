@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 from .. import audit, logic, services
 from ..db import get_db
 from ..models import (
-    CATEGORIES, Material, ProductionComponent, QCParameter, QCResult, QCTest, Recipe, RecipeComponent, User,
+    CATEGORIES, UNITS, Material, ProductionComponent, QCParameter, QCResult, QCTest, Recipe, RecipeComponent, StockAdjustment, User,
 )
 from ..security import check_csrf, require
 from ..web import flash, indexed_rows, redirect, render
@@ -87,6 +87,10 @@ async def material_save(request: Request, mid: int | None = None, db: Session = 
         errors.append("Enter the material name.")
     if category not in CATEGORIES:
         errors.append("Select a category.")
+    stock_unit = str(form.get("stock_unit") or "kg")
+    if stock_unit not in UNITS:
+        errors.append("Select a stock unit.")
+    reorder = services.parse_num(form.get("reorder_level"), "Reorder level", errors)
     dup = db.scalars(select(Material).where(func.lower(Material.name) == name.lower())).first()
     if dup and (not m or dup.id != m.id):
         errors.append("A material with this name already exists.")
@@ -99,6 +103,7 @@ async def material_save(request: Request, mid: int | None = None, db: Session = 
     m.name, m.category = name, category
     m.supplier = str(form.get("supplier", "")).strip()
     m.notes = str(form.get("notes", "")).strip()
+    m.stock_unit, m.reorder_level = stock_unit, reorder
     m.active = form.get("active") == "on" if not is_new else True
     db.flush()
     audit.record(db, user, "create" if is_new else "update", "material", m.id, {"name": name, "category": category})
@@ -112,7 +117,8 @@ def material_delete(mid: int, request: Request, db: Session = Depends(get_db), u
     m = db.get(Material, mid) or _404()
     used = (db.scalar(select(func.count(QCTest.id)).where(QCTest.material_id == mid)) or 0) + \
            (db.scalar(select(func.count(ProductionComponent.id)).where(ProductionComponent.material_id == mid)) or 0) + \
-           (db.scalar(select(func.count(RecipeComponent.id)).where(RecipeComponent.material_id == mid)) or 0)
+           (db.scalar(select(func.count(RecipeComponent.id)).where(RecipeComponent.material_id == mid)) or 0) + \
+           (db.scalar(select(func.count(StockAdjustment.id)).where(StockAdjustment.material_id == mid)) or 0)
     if used:
         flash(request, "This material is used in tests, production records or recipes. Mark it inactive instead of deleting it.", "error")
         return redirect(f"/setup/materials/{mid}")

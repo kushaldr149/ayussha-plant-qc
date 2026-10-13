@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Record specimens cast{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><h1>Record specimens cast</h1><p class="muted">Record the specimens when they are cast. Results are entered later on the sample page, as each age is tested.</p></div></div>
+<form class="panel stack" method="post" action="/strength/new" style="max-width:860px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f wide"><span>From delivery (optional)</span><select name="dispatch_id" id="s_disp"><option value="">Not from a delivery (e.g. plant trial)</option>{% for d in dispatches %}<option value="{{ d.id }}" {% if v.get('dispatch_id') == d.id|string %}selected{% endif %}>{{ d.dispatch_no }} · {{ d.order.customer.name }}{% if d.order.site %} · {{ d.order.site.name }}{% endif %} · {{ d.dispatch_date|d }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Grade</span><select name="grade_id" id="s_grade"><option value="">{% if grades %}Take from the order{% else %}No grades set up{% endif %}</option>{% for g in grades %}<option value="{{ g.id }}" {% if v.get('grade_id') == g.id|string %}selected{% endif %}>{{ g.name }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Casting date</span><input type="date" name="cast_date" id="s_cast" required value="{{ v.get('cast_date') or today }}"></label>
+    <label class="f"><span>Cast at</span><input name="cast_location" id="s_loc" value="{{ v.get('cast_location', '') }}" placeholder="Site or location"></label>
+    <label class="f"><span>Specimen</span><select name="specimen_type" id="s_type">{% for t in ["Cube", "Cylinder"] %}<option {% if v.get('specimen_type', 'Cube') == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Size (mm): cube side or cylinder diameter</span><input name="specimen_size_mm" id="s_size" inputmode="decimal" class="mono" value="{{ v.get('specimen_size_mm', '') }}"><span class="hint">Needed to calculate strength from failure load.</span></label>
+    <label class="f"><span>Test ages (days, comma separated)</span><input name="test_ages" id="s_ages" class="mono" value="{{ v.get('test_ages', '') }}" placeholder="As per your test plan"></label>
+    <label class="f"><span>Specimens per age</span><input name="specimens_per_age" id="s_per" inputmode="numeric" class="mono" value="{{ v.get('specimens_per_age', '') }}"></label>
+    <label class="f wide"><span>Fresh concrete observations</span><textarea name="fresh_notes" id="s_fresh" rows="2" placeholder="Workability, temperature or other tests done at site, as measured">{{ v.get('fresh_notes', '') }}</textarea></label>
+    <label class="f wide"><span>Remarks</span><textarea name="remarks" id="s_rem" rows="2">{{ v.get('remarks', '') }}</textarea></label>
+  </div>
+  <div class="actions"><a class="btn" href="/strength">Cancel</a><button class="btn primary" type="submit">Save sample</button></div>
+</form>
+{% endblock %}

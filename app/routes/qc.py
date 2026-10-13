@@ -129,7 +129,11 @@ async def qc_decision(test_id: int, request: Request, db: Session = Depends(get_
 @router.post("/{test_id}/delete")
 def qc_delete(test_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("records.delete"))):
     test = _get(db, test_id)
+    from ..models import NCR
     used = db.scalar(select(func.count(ProductionComponent.id)).where(ProductionComponent.lot_test_id == test.id))
+    if db.scalar(select(func.count(NCR.id)).where(NCR.qc_test_id == test.id)):
+        flash(request, "An NCR refers to this test, so it cannot be deleted.", "error")
+        return redirect(f"/qc/{test.id}")
     if used:
         flash(request, f"This lot is referenced by {used} production component(s), so the test cannot be deleted.", "error")
         return redirect(f"/qc/{test.id}")

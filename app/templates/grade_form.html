@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit grade" if g else "Add grade" }}{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><h1>{{ "Edit grade" if g else "Add grade" }}</h1>
+<p class="muted">Enter the values from the specification that applies to your supply. Leave a value empty if the specification does not give it. Changing values here re-checks all strength results of this grade.</p></div></div>
+<form class="panel stack" method="post" action="{{ '/setup/grades/%d' % g.id if g else '/setup/grades/new' }}" style="max-width:760px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f"><span>Grade name</span><input name="name" id="g_name" required value="{{ v.get('name', (g.name if g and g.name is not none else '')) }}"></label>
+    <label class="f"><span>Specified strength (MPa)</span><input name="specified_strength_mpa" id="g_spec" inputmode="decimal" class="mono" value="{{ v.get('specified_strength_mpa', (g.specified_strength_mpa if g and g.specified_strength_mpa is not none else '')) }}"></label>
+    <label class="f"><span>Acceptance age (days)</span><input name="acceptance_age_days" id="g_age" inputmode="numeric" class="mono" value="{{ v.get('acceptance_age_days', (g.acceptance_age_days if g and g.acceptance_age_days is not none else '')) }}"></label>
+    <label class="f"><span>Minimum individual result (MPa)</span><input name="min_individual_mpa" id="g_ind" inputmode="decimal" class="mono" value="{{ v.get('min_individual_mpa', (g.min_individual_mpa if g and g.min_individual_mpa is not none else '')) }}"></label>
+    <label class="f"><span>Minimum mean of the set (MPa)</span><input name="min_mean_mpa" id="g_mean" inputmode="decimal" class="mono" value="{{ v.get('min_mean_mpa', (g.min_mean_mpa if g and g.min_mean_mpa is not none else '')) }}"></label>
+    <label class="f wide"><span>Specification / clause reference</span><input name="reference" id="g_ref" value="{{ v.get('reference', (g.reference if g and g.reference is not none else '')) }}"></label>
+    <label class="f wide"><span>Notes</span><textarea name="notes" id="g_notes" rows="2">{{ v.get('notes', (g.notes if g and g.notes is not none else '')) }}</textarea></label>
+    {% if g %}<label class="check"><input type="checkbox" name="active" id="g_active" {% if g.active %}checked{% endif %}> Active</label>{% endif %}
+  </div>
+  <div class="actions"><a class="btn" href="/setup/masters#grades">Cancel</a><button class="btn primary" type="submit">Save grade</button></div>
+</form>
+{% endblock %}

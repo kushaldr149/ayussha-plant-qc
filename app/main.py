@@ -16,7 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import audit, config
 from .db import SessionLocal, init_db
 from .models import User
-from .routes import api, auth, production, qc, reports, setup, users
+from .routes import api, auth, dispatch, masters, production, qc, quality, reports, setup, stock, strength, users
 from .security import LoginRequired, PasswordChangeRequired, current_user_optional, hash_password, password_problem
 from .services import get_settings
 from .web import redirect, render
@@ -58,7 +58,8 @@ app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY, session_cook
                    max_age=config.SESSION_HOURS * 3600, same_site="lax", https_only=config.COOKIE_SECURE)
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
-for r in (auth.router, qc.router, production.router, setup.router, users.router, reports.router, api.router):
+for r in (auth.router, qc.router, production.router, setup.router, masters.router, dispatch.router, strength.router,
+          stock.router, quality.router, users.router, reports.router, api.router):
     app.include_router(r)
 
 

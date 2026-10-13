@@ -10,6 +10,9 @@
     <label class="f wide"><span>Material name</span><input name="name" id="m_name" required value="{{ v.get('name', m.name if m else '') }}" placeholder="As it appears on your purchase orders"></label>
     <label class="f"><span>Category</span><select name="category" id="m_cat">{% set cur = v.get('category', m.category if m else '') %}{% for c in CATEGORIES %}<option {% if c == cur %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
     <label class="f"><span>Usual supplier</span><input name="supplier" id="m_sup" value="{{ v.get('supplier', m.supplier if m else '') }}"></label>
+    {% set su = v.get('stock_unit', (m.stock_unit or 'kg') if m else 'kg') %}
+    <label class="f"><span>Stock unit</span><select name="stock_unit" id="m_unit">{% for u in UNITS %}<option {% if u == su %}selected{% endif %}>{{ u }}</option>{% endfor %}</select><span class="hint">kg and t convert to each other, as do L and mL.</span></label>
+    <label class="f"><span>Reorder level (in stock unit)</span><input name="reorder_level" id="m_reorder" inputmode="decimal" class="mono" value="{{ v.get('reorder_level', m.reorder_level if m and m.reorder_level is not none else '') }}"></label>
     <label class="f wide"><span>Notes</span><textarea name="notes" id="m_notes" rows="2">{{ v.get('notes', m.notes if m else '') }}</textarea></label>
     {% if m %}<label class="check"><input type="checkbox" name="active" id="m_active" {% if m.active %}checked{% endif %}> Active (inactive materials are hidden from new tests and records)</label>{% endif %}
   </div>

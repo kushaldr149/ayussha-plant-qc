@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from .. import ai, audit, config, reports, services
+from .. import ai, audit, config, logic, reports, services
 from ..db import get_db
 from ..models import AIReview, ProductionRecord, QCTest, User
 from ..security import check_csrf, require
@@ -86,8 +86,10 @@ async def ai_run(request: Request, db: Session = Depends(get_db), user: User = D
     form = await request.form()
     start, end = parse_period(form.get("from"), form.get("to"))
     data = services.review_data(db, start, end, config.AI_MAX_RECORDS)
+    from .. import operations as _ops
+    data.update(_ops.review_extra(db, start, end, config.AI_MAX_RECORDS))
     qn, pn = len(data["material_tests"]), len(data["production_records"])
-    if not qn and not pn:
+    if not any(data.get(k) for k in ("material_tests", "production_records", "dispatches", "strength_samples", "ncrs")):
         flash(request, "There are no records in this period to review.", "warn")
         return redirect(f"/ai?from={start}&to={end}")
     try:
@@ -110,3 +112,138 @@ def ai_detail(review_id: int, request: Request, db: Session = Depends(get_db), u
     if not rev:
         raise HTTPException(404, "This review does not exist.")
     return render(request, db, user, "ai_detail.html", rev=rev, limit=config.AI_MAX_RECORDS)
+
+
+# ================================================================ dispatch, strength, stock, NCR, equipment
+
+from datetime import date as _date  # noqa: E402
+
+from .. import operations as ops  # noqa: E402
+from ..models import (  # noqa: E402
+    NCR, ConcreteGrade, CubeSample, Dispatch, DispatchItem, Equipment, Order,
+)
+
+
+def _date_filter(stmt, column, params: dict):
+    for key in ("from", "to"):
+        if params.get(key):
+            try:
+                d = _date.fromisoformat(params[key])
+                stmt = stmt.where(column >= d if key == "from" else column <= d)
+            except ValueError:
+                pass
+    return stmt
+
+
+def _stamp(params: dict) -> str:
+    return f"{params.get('from') or 'all'}-to-{params.get('to') or config.local_today().isoformat()}"
+
+
+@router.get("/dispatch/{did}/note.pdf")
+def delivery_note(did: int, db: Session = Depends(get_db), user: User = Depends(require("view"))):
+    d = db.scalars(select(Dispatch).where(Dispatch.id == did).options(
+        selectinload(Dispatch.items).selectinload(DispatchItem.production))).first()
+    if not d:
+        raise HTTPException(404, "This dispatch does not exist.")
+    return _file(reports.delivery_note_pdf(d, services.get_settings(db)), "application/pdf", f"{d.dispatch_no}.pdf", inline=True)
+
+
+@router.get("/strength/{sid}/report.pdf")
+def strength_pdf(sid: int, db: Session = Depends(get_db), user: User = Depends(require("view"))):
+    s = db.scalars(select(CubeSample).where(CubeSample.id == sid).options(selectinload(CubeSample.results))).first()
+    if not s:
+        raise HTTPException(404, "This sample does not exist.")
+    return _file(reports.strength_report_pdf(s, ops.sample_summary(s), services.get_settings(db)), "application/pdf",
+                 f"{s.sample_no}.pdf", inline=True)
+
+
+@router.get("/reports/dispatch.xlsx")
+def dispatch_xlsx(request: Request, db: Session = Depends(get_db), user: User = Depends(require("reports"))):
+    params = dict(request.query_params)
+    stmt = _date_filter(select(Dispatch), Dispatch.dispatch_date, params)
+    if params.get("status"):
+        stmt = stmt.where(Dispatch.status == params["status"])
+    rows = []
+    for d in db.scalars(stmt.options(selectinload(Dispatch.items).selectinload(DispatchItem.production))
+                        .order_by(Dispatch.dispatch_date, Dispatch.id).limit(20000)).all():
+        o = d.order
+        for it in (d.items or [None]):
+            rows.append([d.dispatch_no, d.dispatch_date, o.order_no, o.customer.name, o.site.name if o.site else "",
+                         o.grade.name if o.grade else "", d.truck.reg_no if d.truck else "", d.mixer.reg_no if d.mixer else "",
+                         d.driver_name, d.status, it.production.record_no if it else "", it.production.product_line if it else "",
+                         it.bags if it else None, d.planned_m3, d.delivered_m3, d.received_by, reports._dt_local(d.delivered_at),
+                         d.remarks])
+    data = reports.table_excel("Dispatch", ["Dispatch no.", "Date", "Order no.", "Customer", "Site", "Grade", "Truck",
+                                            "Mixer on wheels", "Driver", "Status", "Production record", "Product line", "Bags",
+                                            "Planned m³", "Placed m³", "Received by", "Delivered at", "Remarks"], rows, (2,))
+    return _file(data, XLSX, f"dispatch-{_stamp(params)}.xlsx")
+
+
+@router.get("/reports/strength.xlsx")
+def strength_xlsx(request: Request, db: Session = Depends(get_db), user: User = Depends(require("reports"))):
+    params = dict(request.query_params)
+    stmt = _date_filter(select(CubeSample), CubeSample.cast_date, params)
+    if params.get("grade", "").isdigit():
+        stmt = stmt.where(CubeSample.grade_id == int(params["grade"]))
+    rows = []
+    for s in db.scalars(stmt.options(selectinload(CubeSample.results)).order_by(CubeSample.cast_date, CubeSample.id)
+                        .limit(20000)).all():
+        sm = ops.sample_summary(s)
+        cust = s.dispatch.order.customer.name if s.dispatch else ""
+        for g in sm["groups"]:
+            for r in (g["results"] or [None]):
+                rows.append([s.sample_no, s.cast_date, s.grade.name if s.grade else "", cust,
+                             s.dispatch.dispatch_no if s.dispatch else "", s.specimen_type, s.specimen_size_mm, g["age"],
+                             r.test_date if r else None, r.specimen_no if r else "", r.mass_kg if r else None,
+                             r.load_kn if r else None, r.strength_mpa if r else None,
+                             round(g["mean"], 2) if g["mean"] is not None else None, logic.STRENGTH_LABELS[g["status"]]])
+    data = reports.table_excel("Strength tests", ["Sample no.", "Cast date", "Grade", "Customer", "Dispatch no.", "Specimen",
+                                                  "Size mm", "Age days", "Test date", "Specimen no.", "Mass kg", "Load kN",
+                                                  "Strength MPa", "Mean at age MPa", "Check"], rows, (2, 9))
+    return _file(data, XLSX, f"strength-tests-{_stamp(params)}.xlsx")
+
+
+@router.get("/reports/stock.xlsx")
+def stock_xlsx(db: Session = Depends(get_db), user: User = Depends(require("reports"))):
+    rows = []
+    for ms in ops.raw_stock(db):
+        for lb in ms.lots.values():
+            rows.append([ms.material.name, ms.material.category, lb.lot, lb.decision, ms.unit, round(lb.received, 3),
+                         round(lb.used, 3), round(lb.adjusted, 3), round(lb.balance, 3), lb.last_date])
+        if not ms.lots:
+            rows.append([ms.material.name, ms.material.category, "", "", ms.unit, 0, 0, 0, 0, None])
+    data = reports.table_excel("Raw material stock", ["Material", "Category", "Lot", "Lot decision", "Unit", "Received",
+                                                      "Used", "Adjusted", "Balance", "Last movement"], rows, (10,))
+    return _file(data, XLSX, f"stock-{config.local_today().isoformat()}.xlsx")
+
+
+@router.get("/reports/ncr.xlsx")
+def ncr_xlsx(request: Request, db: Session = Depends(get_db), user: User = Depends(require("reports"))):
+    params = dict(request.query_params)
+    stmt = _date_filter(select(NCR), NCR.raised_date, params)
+    if params.get("status") == "open":
+        stmt = stmt.where(NCR.status != "Closed")
+    elif params.get("status"):
+        stmt = stmt.where(NCR.status == params["status"])
+    rows = [[n.ncr_no, n.raised_date, n.source, n.title, n.description, n.containment, n.root_cause, n.corrective_action,
+             n.owner.display if n.owner else "", n.due_date, n.status, n.verification, n.closed_date,
+             n.raised_by.display if n.raised_by else ""]
+            for n in db.scalars(stmt.order_by(NCR.raised_date, NCR.id)).all()]
+    data = reports.table_excel("NCR register", ["NCR no.", "Raised", "Source", "Title", "Description", "Containment",
+                                                "Root cause", "Corrective action", "Owner", "Due", "Status", "Verification",
+                                                "Closed", "Raised by"], rows, (2, 10, 13))
+    return _file(data, XLSX, f"ncr-register-{_stamp(params)}.xlsx")
+
+
+@router.get("/reports/equipment.xlsx")
+def equipment_xlsx(db: Session = Depends(get_db), user: User = Depends(require("reports"))):
+    rows = []
+    for e in db.scalars(select(Equipment).order_by(Equipment.tag)).all():
+        last = e.calibrations[0] if e.calibrations else None
+        rows.append([e.tag, e.name, e.location, e.make_model, e.serial_no, e.range_text, e.interval_days, e.status,
+                     last.cal_date if last else None, last.result if last else "", last.certificate_no if last else "",
+                     last.agency if last else "", e.next_due])
+    data = reports.table_excel("Equipment", ["ID / tag", "Name", "Location", "Make / model", "Serial no.", "Range",
+                                             "Interval days", "Status", "Last calibrated", "Result", "Certificate no.",
+                                             "Agency", "Next due"], rows, (9, 13))
+    return _file(data, XLSX, f"equipment-calibration-{config.local_today().isoformat()}.xlsx")

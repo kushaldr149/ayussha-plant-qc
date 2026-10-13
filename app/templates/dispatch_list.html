@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager %}
+{% block title %}Dispatch{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><h1>Dispatch to site</h1><p class="muted">Bags loaded per trip, the truck and mixer-on-wheels used, and delivery at site. Each bag line links back to its production record and material lots.</p></div>
+  <div class="row"><a class="btn" href="/orders">Orders</a>{% if can("reports") %}<a class="btn" href="/reports/dispatch.xlsx?{{ f|urlencode }}">Export to Excel</a>{% endif %}{% if can("dispatch.write") %}<a class="btn primary" href="/dispatch/new">New dispatch</a>{% endif %}</div>
+</div>
+<form class="filters" method="get" action="/dispatch" data-autosubmit>
+  <label>Status<select name="status" id="d-status"><option value="">All</option>{% for s in statuses %}<option {% if f.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>From<input type="date" name="from" id="d-from" value="{{ f.get('from', '') }}"></label>
+  <label>To<input type="date" name="to" id="d-to" value="{{ f.get('to', '') }}"></label>
+  <label>Search<input type="search" name="q" id="d-q" value="{{ f.get('q', '') }}" placeholder="Dispatch, order, customer, driver"></label>
+  <button class="btn" type="submit">Apply</button>{% if f %}<a class="btn ghost" href="/dispatch">Clear</a>{% endif %}
+</form>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Dispatch no.</th><th>Date</th><th>Customer / site</th><th>Order</th><th>Truck / mixer</th><th class="num">Bags</th><th>Status</th></tr></thead>
+  <tbody>
+  {% for d in rows %}
+    <tr><td class="mono nowrap"><a class="rowlink" href="/dispatch/{{ d.id }}">{{ d.dispatch_no }}</a></td><td class="nowrap">{{ d.dispatch_date|d }}</td>
+      <td>{{ d.order.customer.name }}{% if d.order.site %}<div class="muted small">{{ d.order.site.name }}</div>{% endif %}</td>
+      <td class="mono">{{ d.order.order_no }}</td>
+      <td class="mono small">{{ d.truck.reg_no if d.truck else "—" }}<br>{{ d.mixer.reg_no if d.mixer else "—" }}</td>
+      <td class="num">{{ d.items|sum(attribute="bags") }}</td>
+      <td><span class="chip {{ {'Delivered': 'pass', 'Dispatched': 'hold', 'Returned': 'fail'}.get(d.status, 'info') }}">{{ d.status }}</span></td></tr>
+  {% else %}
+    <tr><td colspan="7" class="empty"><strong>No dispatches</strong>{% if f %}No dispatches match these filters.{% else %}Dispatch bags from production against an open customer order.{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+<div class="row" style="justify-content:space-between"><span class="muted small">{{ total }} dispatch{{ "es" if total != 1 }}</span>{{ pager(page, pages, f) }}</div>
+{% endblock %}
