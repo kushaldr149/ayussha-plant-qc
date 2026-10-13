@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_macros.html" import res_chip, dec_chip, delete_form %}
+{% block title %}{{ t.test_no }}{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><p class="muted mono" style="margin:0">{{ t.test_no }}</p><h1>{{ t.material_name }} · lot {{ t.lot_no or "—" }}</h1></div>
+  <div class="row"><a class="btn" href="/qc/{{ t.id }}/report.pdf" target="_blank" rel="noopener">Test report (PDF)</a><a class="btn ghost" href="/qc">Back to list</a></div>
+</div>
+<div class="grid2">
+  <div class="panel">
+    <dl class="kv">
+      <dt>Test date</dt><dd>{{ t.test_date|d }}</dd>
+      <dt>Material</dt><dd>{{ t.material_name }}{% if t.category %} <span class="muted">· {{ t.category }}</span>{% endif %}</dd>
+      <dt>Supplier</dt><dd>{{ t.supplier or "—" }}</dd>
+      <dt>Lot / batch no.</dt><dd class="mono">{{ t.lot_no or "—" }}</dd>
+      <dt>Vehicle no.</dt><dd class="mono">{{ t.vehicle_no or "—" }}</dd>
+      <dt>Quantity</dt><dd>{% if t.quantity is not none %}{{ t.quantity|num }} {{ t.unit }}{% else %}—{% endif %}</dd>
+      <dt>Tested by</dt><dd>{{ t.created_by.display if t.created_by else "—" }} <span class="muted small">· {{ t.created_at|dt }}</span></dd>
+      <dt>Overall</dt><dd>{{ res_chip(t.overall) }}</dd>
+      <dt>Decision</dt><dd>{{ dec_chip(t.decision) }} <span class="muted small">by {{ t.decision_by.display if t.decision_by else "—" }} · {{ t.decision_at|dt }}</span></dd>
+    </dl>
+  </div>
+  <div class="panel">
+    <h2 style="margin-bottom:10px">Decision</h2>
+    {% if can("qc.decide") %}
+    <form class="stack" method="post" action="/qc/{{ t.id }}/decision">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label class="f"><span>Decision</span><select name="decision" id="d_dec">{% for d in DECISIONS %}<option {% if d == t.decision %}selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
+      <label class="f"><span>Remarks</span><textarea name="remarks" id="d_rem" rows="4">{{ t.remarks }}</textarea></label>
+      <div class="actions"><button class="btn primary" type="submit">Save decision</button></div>
+    </form>
+    {% else %}
+    <p style="margin:0;white-space:pre-wrap">{{ t.remarks or "No remarks." }}</p>
+    {% endif %}
+  </div>
+</div>
+<div class="tablewrap">
+<table class="data">
+  <thead><tr><th>Parameter</th><th>Method / reference</th><th>Limit at test time</th><th class="num">Value</th><th>Result</th></tr></thead>
+  <tbody>
+  {% for r in t.results %}
+    <tr><td>{{ r.name }}</td><td class="muted">{{ r.method or "—" }}</td><td class="mono nowrap">{{ limit_text(r.min_value, r.max_value, r.unit) }}</td>
+      <td class="num mono">{% if r.value is not none %}{{ r.value|num(4) }} {{ r.unit }}{% else %}—{% endif %}</td><td>{{ res_chip(r.status) }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div class="panel">
+  <div class="panel-head"><h2>Used in production</h2><span class="muted small">Production records that used this lot</span></div>
+  {% if used_in %}
+  <ul class="alist">{% for c in used_in %}<li><a href="/production/{{ c.record_id }}"><span class="mono">{{ c.record.record_no }}</span><span class="t">{{ c.record.product_line }} · {{ c.actual|num }} {{ c.unit }}</span><span class="d">{{ c.record.prod_date|d }}</span></a></li>{% endfor %}</ul>
+  {% else %}<p class="muted" style="margin:0">Not used in any production record yet.</p>{% endif %}
+</div>
+{% if can("records.delete") %}{{ delete_form("/qc/%d/delete" % t.id, csrf, "Delete this test") }}{% endif %}
+{% endblock %}

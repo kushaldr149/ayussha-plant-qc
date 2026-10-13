@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% from "_macros.html" import prod_chip, pager %}
+{% block title %}Production log{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><h1>Production log</h1><p class="muted">Planned against actual weights for each production record, with the material lots used, so every bag traces back to its inward test.</p></div>
+  <div class="row">
+    {% if can("reports") %}<a class="btn" href="/reports/production.xlsx?{{ f|urlencode }}">Export to Excel</a>{% endif %}
+    {% if can("production.write") %}<a class="btn" href="/production/import">Import CSV</a><a class="btn primary" href="/production/new">New record</a>{% endif %}
+  </div>
+</div>
+<form class="filters" method="get" action="/production" data-autosubmit>
+  <label>Product line<select name="line" id="f-line"><option value="">All product lines</option>{% for l in lines %}<option {% if f.line == l %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+  <label>Status<select name="status" id="f-status"><option value="">All</option>{% for k in ["ok", "over", "notol", "nodata"] %}<option value="{{ k }}" {% if f.status == k %}selected{% endif %}>{{ PROD[k] }}</option>{% endfor %}<option value="lot" {% if f.status == "lot" %}selected{% endif %}>Lot not accepted</option></select></label>
+  <label>From<input type="date" name="from" id="f-from" value="{{ f.get('from', '') }}"></label>
+  <label>To<input type="date" name="to" id="f-to" value="{{ f.get('to', '') }}"></label>
+  <label>Search<input type="search" name="q" id="f-q" value="{{ f.get('q', '') }}" placeholder="Record no., shift, lot"></label>
+  <button class="btn" type="submit">Apply</button>
+  {% if f %}<a class="btn ghost" href="/production">Clear</a>{% endif %}
+</form>
+<div class="tablewrap">
+<table class="data">
+  <thead><tr><th>Record no.</th><th>Date</th><th>Shift</th><th>Product line</th><th class="num">Components</th><th class="num">Bags</th><th class="num">Max deviation</th><th>Status</th><th>Entered by</th></tr></thead>
+  <tbody>
+  {% for r in records %}
+    <tr>
+      <td class="mono nowrap"><a class="rowlink" href="/production/{{ r.id }}">{{ r.record_no }}</a></td>
+      <td class="nowrap">{{ r.prod_date|d }}</td>
+      <td>{{ r.shift or "—" }}</td>
+      <td>{{ r.product_line }}{% if r.recipe_name %}<div class="muted small">{{ r.recipe_name }}</div>{% endif %}</td>
+      <td class="num">{{ r.components|length }}</td>
+      <td class="num">{{ r.bags if r.bags is not none else "—" }}</td>
+      <td class="num mono">{% if r.max_abs_dev_pct is not none %}{{ "%.2f"|format(r.max_abs_dev_pct) }}%{% else %}—{% endif %}</td>
+      <td>{{ prod_chip(r.status) }}{% if r.lot_issue %}<div style="margin-top:4px"><span class="chip hold">Lot not accepted</span></div>{% endif %}</td>
+      <td>{{ r.created_by.display if r.created_by else r.source|upper }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="empty"><strong>No records</strong>{% if f %}No records match these filters.{% else %}Log planned and actual weights for each production run here, or import them from a CSV file.{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div class="row" style="justify-content:space-between"><span class="muted small">{{ total }} record{{ "s" if total != 1 }}</span>{{ pager(page, pages, f) }}</div>
+{% endblock %}

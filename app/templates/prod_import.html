@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Import production records{% endblock %}
+{% block content %}
+<div class="toolbar"><div><h1>Import production records</h1>
+<p class="muted">Use this to bring in records exported from the plant control system or a spreadsheet. Each row is one component; rows with the same record number become one production record.</p></div>
+<a class="btn" href="/production/import/template.csv">Download CSV template</a></div>
+
+{% if results %}
+<div class="tablewrap">
+<table class="data">
+  <thead><tr><th>From CSV line</th><th>Record no.</th><th>Result</th></tr></thead>
+  <tbody>{% for r in results %}
+    <tr><td class="mono">{{ r.line }}</td><td class="mono">{% if r.ok %}<a href="/production/{{ r.id }}">{{ r.record_no }}</a>{% else %}{{ r.record_no }}{% endif %}</td>
+      <td>{% if r.ok %}<span class="chip pass">Imported</span>{% else %}<span class="chip fail">Not imported</span><div class="small bad">{{ r.errors|join("; ") }}</div>{% endif %}</td></tr>
+  {% endfor %}</tbody>
+</table>
+</div>
+<p class="muted small">{{ results|selectattr("ok")|list|length }} of {{ results|length }} records imported.</p>
+{% endif %}
+
+<form class="panel stack" method="post" action="/production/import" enctype="multipart/form-data" style="max-width:640px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <label class="f"><span>CSV file (UTF-8)</span><input type="file" name="file" id="csvfile" accept=".csv,text/csv" required></label>
+  <div class="actions"><button class="btn primary" type="submit">Import</button></div>
+</form>
+
+<div class="panel">
+  <h2>Columns</h2>
+  <p class="muted">Required: <span class="mono">date</span> (YYYY-MM-DD), <span class="mono">product_line</span>, <span class="mono">material</span> (name exactly as in Setup), <span class="mono">actual</span>. Optional: the rest.</p>
+  <pre class="code">{{ columns|join(",") }}</pre>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+services:
+  plantqc:
+    build: .
+    image: ayussha-plant-qc:latest
+    container_name: plantqc
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - plantqc-data:/data
+    restart: unless-stopped
+
+volumes:
+  plantqc-data:

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import res_chip, dec_chip, pager %}
+{% block title %}Material QC{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><h1>Material QC</h1><p class="muted">Inward tests on cement, SCMs, aggregates, coating material and admixtures, with the accept, hold or reject decision for each lot.</p></div>
+  <div class="row">
+    {% if can("reports") %}<a class="btn" href="/reports/qc.xlsx?{{ f|urlencode }}">Export to Excel</a>{% endif %}
+    {% if can("qc.write") %}<a class="btn primary" href="/qc/new">New test</a>{% endif %}
+  </div>
+</div>
+<form class="filters" method="get" action="/qc" data-autosubmit>
+  <label>Material<select name="material" id="f-material"><option value="">All materials</option>{% for m in materials %}<option value="{{ m.id }}" {% if f.material == m.id|string %}selected{% endif %}>{{ m.name }}</option>{% endfor %}</select></label>
+  <label>Result<select name="result" id="f-result"><option value="">All results</option>{% for k in ["pass", "fail", "incomplete"] %}<option value="{{ k }}" {% if f.result == k %}selected{% endif %}>{{ STATUS[k] }}</option>{% endfor %}</select></label>
+  <label>Decision<select name="decision" id="f-decision"><option value="">All decisions</option>{% for k in DECISIONS %}<option {% if f.decision == k %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+  <label>From<input type="date" name="from" id="f-from" value="{{ f.get('from', '') }}"></label>
+  <label>To<input type="date" name="to" id="f-to" value="{{ f.get('to', '') }}"></label>
+  <label>Search<input type="search" name="q" id="f-q" value="{{ f.get('q', '') }}" placeholder="Test no., lot, vehicle, supplier"></label>
+  <button class="btn" type="submit">Apply</button>
+  {% if f %}<a class="btn ghost" href="/qc">Clear</a>{% endif %}
+</form>
+<div class="tablewrap">
+<table class="data">
+  <thead><tr><th>Test no.</th><th>Date</th><th>Material</th><th>Lot / vehicle</th><th>Supplier</th><th class="num">Values</th><th>Result</th><th>Decision</th><th>Tested by</th></tr></thead>
+  <tbody>
+  {% for t in tests %}
+    {% set outs = t.results|selectattr("status", "equalto", "fail")|list|length %}
+    <tr>
+      <td class="mono nowrap"><a class="rowlink" href="/qc/{{ t.id }}">{{ t.test_no }}</a></td>
+      <td class="nowrap">{{ t.test_date|d }}</td>
+      <td>{{ t.material_name }}</td>
+      <td class="mono">{{ t.lot_no or "—" }}{% if t.vehicle_no %}<div class="muted small">{{ t.vehicle_no }}</div>{% endif %}</td>
+      <td>{{ t.supplier or "—" }}</td>
+      <td class="num">{{ t.results|rejectattr("value", "none")|list|length }}{% if outs %}<div class="small bad">{{ outs }} out</div>{% endif %}</td>
+      <td>{{ res_chip(t.overall) }}</td>
+      <td>{{ dec_chip(t.decision) }}</td>
+      <td>{{ t.created_by.display if t.created_by else "—" }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="empty"><strong>No tests</strong>{% if f %}No tests match these filters.{% else %}Record inward tests here once materials and their test limits are set in Setup.{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div class="row" style="justify-content:space-between"><span class="muted small">{{ total }} test{{ "s" if total != 1 }}</span>{{ pager(page, pages, f) }}</div>
+{% endblock %}

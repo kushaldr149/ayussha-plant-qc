@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}New production record{% endblock %}
+{% block content %}
+<div class="toolbar"><div><h1>New production record</h1><p class="muted">Enter the lot used for each material so the record traces back to its inward test. Lots that are on hold, rejected or never tested are flagged.</p></div></div>
+<script type="application/json" id="prod-payload">{{ payload|tojson }}</script>
+<script type="application/json" id="prod-comps">{{ comps|tojson }}</script>
+<form class="panel stack" method="post" action="/production/new" id="prod-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f"><span>Production date</span><input type="date" name="prod_date" id="p_date" value="{{ form.prod_date or today }}" required></label>
+    <label class="f"><span>Shift</span><input name="shift" id="p_shift" list="p_shifts" value="{{ form.shift or '' }}" autocomplete="off"><datalist id="p_shifts">{% for s in settings.shift_list %}<option value="{{ s }}">{% endfor %}</datalist></label>
+    <label class="f"><span>Record / batch no.</span><input name="record_no" id="p_no" class="mono" value="{{ form.record_no or '' }}" autocomplete="off" placeholder="Automatic if left empty"></label>
+    <label class="f"><span>Product line</span>
+      {% if settings.product_line_list %}
+      <select name="product_line" id="p_line" required><option value="">Select product line</option>{% for l in settings.product_line_list %}<option {% if form.product_line == l %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+      {% else %}<input name="product_line" id="p_line" value="{{ form.product_line or '' }}" required placeholder="Set product lines in Setup">{% endif %}
+    </label>
+    <label class="f wide"><span>Recipe (optional, fills in planned quantities)</span><select name="recipe_id" id="p_rec"><option value="">No recipe</option>{% for r in recipes %}<option value="{{ r.id }}" {% if form.recipe_id == r.id|string %}selected{% endif %}>{{ r.name }}{% if r.product_line %} · {{ r.product_line }}{% endif %}</option>{% endfor %}</select></label>
+  </div>
+  <div>
+    <div class="panel-head" style="margin-bottom:8px"><h2>Components</h2><span class="muted small">{% if settings.tolerance_pct is not none %}Batching tolerance ± {{ settings.tolerance_pct|num }}%{% else %}Batching tolerance not set in Setup; deviations are shown but not flagged{% endif %}</span></div>
+    <div class="comp-head" aria-hidden="true"><span>Material</span><span>Lot no.</span><span>Planned</span><span>Actual</span><span>Unit</span><span>Deviation</span></div>
+    <div class="comps" id="p_comps"></div>
+    <div style="margin-top:10px"><button type="button" class="btn" id="p_add">Add component</button></div>
+  </div>
+  <div class="fgrid">
+    <label class="f"><span>Bags filled</span><input name="bags" id="p_bags" inputmode="numeric" class="mono" value="{{ form.bags or '' }}"></label>
+    <label class="f"><span>Target weight per bag (kg)</span><input name="bag_target_kg" id="p_bagwt" inputmode="decimal" class="mono" value="{{ form.bag_target_kg or '' }}"></label>
+    <label class="f"><span>Total actual weight (kg)</span><input name="total_actual_kg" id="p_total" inputmode="decimal" class="mono" value="{{ form.total_actual_kg or '' }}"></label>
+    <label class="f wide"><span>Remarks</span><textarea name="remarks" id="p_rem" rows="3">{{ form.remarks or '' }}</textarea></label>
+  </div>
+  <div class="actions"><a class="btn" href="/production">Cancel</a><button class="btn primary" type="submit">Save record</button></div>
+</form>
+{% endblock %}

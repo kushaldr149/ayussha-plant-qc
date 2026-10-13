@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="toolbar"><div><h1>Reports</h1><p class="muted">Excel exports for a date range. PDF test reports and batch certificates are on each test and production record.</p></div></div>
+<form class="panel stack" method="get" action="/reports" style="max-width:760px">
+  <div class="fgrid">
+    <label class="f"><span>From</span><input type="date" name="from" id="r_from" value="{{ start.isoformat() }}"></label>
+    <label class="f"><span>To</span><input type="date" name="to" id="r_to" value="{{ end.isoformat() }}"></label>
+  </div>
+  <div class="actions"><button class="btn" type="submit">Set period</button></div>
+</form>
+<div class="grid2">
+  <div class="panel">
+    <h2>Material QC register</h2>
+    <p class="muted">One row per test value: material, supplier, lot, limit at test time, value, result and decision.</p>
+    <a class="btn primary" href="/reports/qc.xlsx?from={{ start.isoformat() }}&amp;to={{ end.isoformat() }}">Download Excel ({{ start|d }} to {{ end|d }})</a>
+  </div>
+  <div class="panel">
+    <h2>Production log</h2>
+    <p class="muted">One row per component: planned, actual, deviation, lot used and the lot's QC decision.</p>
+    <a class="btn primary" href="/reports/production.xlsx?from={{ start.isoformat() }}&amp;to={{ end.isoformat() }}">Download Excel ({{ start|d }} to {{ end|d }})</a>
+  </div>
+</div>
+{% endblock %}

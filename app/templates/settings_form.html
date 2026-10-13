@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Plant settings{% endblock %}
+{% block content %}
+{% set v = form or {} %}
+<div class="toolbar"><div><h1>Plant settings</h1><p class="muted">The company and plant names appear on test reports and batch certificates.</p></div></div>
+<form class="panel stack" method="post" action="/setup/settings" style="max-width:760px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f wide"><span>Company name</span><input name="company_name" id="s_company" value="{{ v.get('company_name', settings.company_name) }}"></label>
+    <label class="f"><span>Plant name</span><input name="plant_name" id="s_plant" value="{{ v.get('plant_name', settings.plant_name) }}"></label>
+    <label class="f"><span>Batching tolerance (± % of planned weight)</span><input name="tolerance_pct" id="s_tol" inputmode="decimal" class="mono" value="{{ v.get('tolerance_pct', settings.tolerance_pct if settings.tolerance_pct is not none else '') }}">
+      <span class="hint">Leave empty until it is fixed from your specification.</span></label>
+    <label class="f wide"><span>Plant address</span><textarea name="plant_address" id="s_addr" rows="2">{{ v.get('plant_address', settings.plant_address) }}</textarea></label>
+    <label class="f"><span>Product lines (one per line)</span><textarea name="product_lines" id="s_lines" rows="4">{{ v.get('product_lines', settings.product_lines) }}</textarea></label>
+    <label class="f"><span>Shifts (one per line)</span><textarea name="shifts" id="s_shifts" rows="4">{{ v.get('shifts', settings.shifts) }}</textarea></label>
+  </div>
+  <div class="actions"><a class="btn" href="/setup">Cancel</a><button class="btn primary" type="submit">Save settings</button></div>
+</form>
+{% endblock %}

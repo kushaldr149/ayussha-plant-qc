@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}AI review{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><h1>AI review: {{ rev.period_from|d }} to {{ rev.period_to|d }}</h1>
+  <p class="muted">Run {{ rev.created_at|dt }} by {{ rev.created_by.display }} · {{ rev.qc_count }} tests and {{ rev.production_count }} production records · model {{ rev.model }}{% if rev.qc_count >= limit or rev.production_count >= limit %} · only the latest {{ limit }} of each were sent{% endif %}</p></div>
+  <a class="btn ghost" href="/ai">All reviews</a>
+</div>
+<div class="alert">This summary was written by Claude from the records in this app. Check it against the records before acting on it.</div>
+<div class="panel"><div class="ai-text">{{ rev.summary }}</div></div>
+{% endblock %}

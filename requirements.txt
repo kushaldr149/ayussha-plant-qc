@@ -1,0 +1,11 @@
+fastapi==0.143.0
+uvicorn[standard]==0.53.0
+sqlalchemy==2.1.4
+jinja2==3.1.6
+python-multipart==0.0.32
+itsdangerous==2.2.0
+reportlab==5.0.1
+openpyxl==3.1.5
+anthropic==1.13.0
+tzdata
+# For PostgreSQL instead of the built-in SQLite file, also install: psycopg[binary]

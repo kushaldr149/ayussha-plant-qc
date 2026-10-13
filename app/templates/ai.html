@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}AI review{% endblock %}
+{% block content %}
+<div class="toolbar"><div><h1>AI review</h1>
+<p class="muted">Claude reads the tests and production records in the chosen period and summarises out-of-limit results, repeated issues, open decisions and gaps in the data. It is told to use only these records. The review is advisory; decisions on lots stay with the QC team.</p></div></div>
+{% if not enabled %}
+<div class="alert warn">AI review is switched off. Add a Claude API key as <span class="mono">ANTHROPIC_API_KEY</span> in the <span class="mono">.env</span> file and restart the app. Keys are created in the Claude Console.</div>
+{% endif %}
+<form class="panel stack" method="post" action="/ai/run" style="max-width:760px" data-busy="Reviewing… this can take a minute.">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f"><span>From</span><input type="date" name="from" id="ai_from" value="{{ start.isoformat() }}"></label>
+    <label class="f"><span>To</span><input type="date" name="to" id="ai_to" value="{{ end.isoformat() }}"></label>
+  </div>
+  <p class="muted small" style="margin:0">Records are sent to the Claude API ({{ model }}) for this review. Usage is billed to the API key's account.</p>
+  <div class="actions"><button class="btn primary" type="submit" {% if not enabled %}disabled{% endif %}>Run review</button></div>
+</form>
+<div class="tablewrap">
+<table class="data">
+  <thead><tr><th>Run on</th><th>Period</th><th class="num">Tests</th><th class="num">Production records</th><th>By</th></tr></thead>
+  <tbody>
+  {% for r in past %}
+    <tr><td class="nowrap"><a class="rowlink" href="/ai/{{ r.id }}">{{ r.created_at|dt }}</a></td><td>{{ r.period_from|d }} to {{ r.period_to|d }}</td><td class="num">{{ r.qc_count }}</td><td class="num">{{ r.production_count }}</td><td>{{ r.created_by.display }}</td></tr>
+  {% else %}
+    <tr><td colspan="5" class="empty">No reviews yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

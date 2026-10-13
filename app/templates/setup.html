@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Setup{% endblock %}
+{% block content %}
+<div class="toolbar"><div><h1>Setup</h1>
+<p class="muted">{% if can("setup.write") %}Materials, test limits and recipes come from your own specifications. Every test and production record is checked against what is entered here.{% else %}Only administrators can change setup. Every test and production record is checked against these values.{% endif %}</p></div></div>
+
+<div class="panel" id="settings">
+  <div class="panel-head"><h2>Plant settings</h2>{% if can("setup.write") %}<a class="btn" href="/setup/settings">Edit settings</a>{% endif %}</div>
+  <dl class="kv">
+    <dt>Company</dt><dd>{{ settings.company_name or "Not set" }}</dd>
+    <dt>Plant</dt><dd>{{ settings.plant_name or "Not set" }}{% if settings.plant_address %}<div class="muted small" style="white-space:pre-wrap">{{ settings.plant_address }}</div>{% endif %}</dd>
+    <dt>Batching tolerance</dt><dd>{% if settings.tolerance_pct is not none %}± {{ settings.tolerance_pct|num }}% of planned weight{% else %}Not set (deviations are shown but not flagged){% endif %}</dd>
+    <dt>Product lines</dt><dd>{{ settings.product_line_list|join(", ") or "Not set" }}</dd>
+    <dt>Shifts</dt><dd>{{ settings.shift_list|join(", ") or "Not set" }}</dd>
+  </dl>
+</div>
+
+<div class="panel" id="materials">
+  <div class="panel-head"><h2>Materials</h2>{% if can("setup.write") %}<a class="btn" href="/setup/materials/new">Add material</a>{% endif %}</div>
+  <div class="tablewrap">
+  <table class="data">
+    <thead><tr><th>Material</th><th>Category</th><th>Usual supplier</th><th class="num">Parameters</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for m in materials %}
+      <tr><td>{% if can("setup.write") %}<a class="rowlink" href="/setup/materials/{{ m.id }}">{{ m.name }}</a>{% else %}{{ m.name }}{% endif %}{% if m.notes %}<div class="muted small">{{ m.notes }}</div>{% endif %}</td>
+        <td>{{ m.category }}</td><td>{{ m.supplier or "—" }}</td><td class="num">{{ m.parameters|selectattr("active")|list|length }}</td>
+        <td>{% if m.active %}<span class="chip pass">Active</span>{% else %}<span class="chip info">Inactive</span>{% endif %}</td></tr>
+    {% else %}
+      <tr><td colspan="5" class="empty"><strong>No materials yet</strong>Add each material you receive: each cement, SCM, aggregate fraction, coating material and admixture.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="panel" id="parameters">
+  <div class="panel-head"><h2>Test parameters and limits</h2>{% if can("setup.write") and materials %}<a class="btn" href="/setup/parameters/new">Add parameter</a>{% endif %}</div>
+  <div class="tablewrap">
+  <table class="data">
+    <thead><tr><th>Material</th><th>Parameter</th><th>Limit</th><th>Method / reference</th><th>Status</th></tr></thead>
+    <tbody>
+    {% set ns = namespace(any=false) %}
+    {% for m in materials %}{% for p in m.parameters %}{% set ns.any = true %}
+      <tr><td>{{ m.name }}</td>
+        <td>{% if can("setup.write") %}<a class="rowlink" href="/setup/parameters/{{ p.id }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}</td>
+        <td class="mono nowrap">{{ limit_text(p.min_value, p.max_value, p.unit) }}</td><td>{{ p.method or "—" }}</td>
+        <td>{% if p.active %}<span class="chip pass">Active</span>{% else %}<span class="chip info">Inactive</span>{% endif %}</td></tr>
+    {% endfor %}{% endfor %}
+    {% if not ns.any %}
+      <tr><td colspan="5" class="empty"><strong>No test parameters yet</strong>Add each test you run on a material with the minimum and/or maximum from your specification.</td></tr>
+    {% endif %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="panel" id="recipes">
+  <div class="panel-head"><h2>Recipes</h2>{% if can("setup.write") and materials %}<a class="btn" href="/setup/recipes/new">Add recipe</a>{% endif %}</div>
+  <p class="muted small" style="margin:-4px 0 12px">Planned quantities per production record. Choosing a recipe in a new production record fills in the planned weights.</p>
+  <div class="tablewrap">
+  <table class="data">
+    <thead><tr><th>Recipe</th><th>Product line</th><th>Components (planned)</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for r in recipes %}
+      <tr><td>{% if can("setup.write") %}<a class="rowlink" href="/setup/recipes/{{ r.id }}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</td><td>{{ r.product_line or "—" }}</td>
+        <td>{% for c in r.components %}{{ c.material.name }} {{ c.quantity|num }} {{ c.unit }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+        <td>{% if r.active %}<span class="chip pass">Active</span>{% else %}<span class="chip info">Inactive</span>{% endif %}</td></tr>
+    {% else %}
+      <tr><td colspan="4" class="empty"><strong>No recipes yet</strong>Optional. A recipe fills in planned weights when production is logged.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

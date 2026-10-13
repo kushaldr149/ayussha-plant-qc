@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit user" if u else "Add user" }}{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><h1>{{ "Edit user " ~ u.username if u else "Add user" }}</h1>
+{% if not u %}<p class="muted">A one-time password is shown after saving. The person must change it at first sign-in.</p>{% endif %}</div></div>
+<form class="panel stack" method="post" action="{{ '/users/%d' % u.id if u else '/users/new' }}" style="max-width:640px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    {% if not u %}<label class="f"><span>Username</span><input name="username" id="u_name" required autocomplete="off" value="{{ v.get('username', '') }}"><span class="hint">Letters, digits, dots, dashes, underscores.</span></label>{% endif %}
+    <label class="f"><span>Full name</span><input name="full_name" id="u_full" value="{{ v.get('full_name', u.full_name if u else '') }}"></label>
+    {% set cur = v.get('role', u.role if u else '') %}
+    <label class="f"><span>Role</span><select name="role" id="u_role" required><option value="">Select role</option>{% for k, label in ROLES.items() %}<option value="{{ k }}" {% if k == cur %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    {% if u %}
+    <label class="check"><input type="checkbox" name="active" id="u_active" {% if u.active %}checked{% endif %}> Account active</label>
+    <label class="check"><input type="checkbox" name="reset_password" id="u_reset"> Reset password (a new one-time password will be shown)</label>
+    {% endif %}
+  </div>
+  <div class="actions"><a class="btn" href="/users">Cancel</a><button class="btn primary" type="submit">Save user</button></div>
+</form>
+{% endblock %}

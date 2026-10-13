@@ -1,0 +1,35 @@
+{% macro res_chip(status) -%}
+{%- set cls = {"pass": "pass", "fail": "fail", "incomplete": "hold", "missing": "info", "nolimit": "info"} -%}
+<span class="chip {{ cls.get(status, 'info') }}">{{ STATUS.get(status, status) }}</span>
+{%- endmacro %}
+
+{% macro dec_chip(decision) -%}
+{%- set cls = {"Accepted": "pass", "Rejected": "fail", "On hold": "hold"} -%}
+<span class="chip {{ cls.get(decision, 'info') }}">{{ decision or "—" }}</span>
+{%- endmacro %}
+
+{% macro prod_chip(status) -%}
+{%- set cls = {"ok": "pass", "over": "fail", "notol": "info", "nodata": "info"} -%}
+<span class="chip {{ cls.get(status, 'info') }}">{{ PROD.get(status, status) }}</span>
+{%- endmacro %}
+
+{% macro csrf_field(csrf) -%}<input type="hidden" name="csrf_token" value="{{ csrf }}">{%- endmacro %}
+
+{% macro pager(page, pages, f) -%}
+{% if pages > 1 %}
+<div class="pager">
+  {% set q = f.copy() if f else {} %}
+  {% if page > 1 %}{% set _ = q.update({"page": page - 1}) %}<a class="btn" href="?{{ q|urlencode }}">Previous</a>{% endif %}
+  <span class="muted small">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}{% set _ = q.update({"page": page + 1}) %}<a class="btn" href="?{{ q|urlencode }}">Next</a>{% endif %}
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro delete_form(action, csrf, label) -%}
+<form method="post" action="{{ action }}" class="dangerzone" data-confirm>
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <button type="submit" class="btn danger" data-label="{{ label }}">{{ label }}</button>
+  <span class="muted small" data-note></span>
+</form>
+{%- endmacro %}

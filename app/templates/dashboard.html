@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_macros.html" import res_chip, dec_chip, prod_chip %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><h1>Overview</h1><p class="muted">Last 7 days, plus every lot still on hold.</p></div>
+  <div class="row">
+    {% if can("qc.write") %}<a class="btn primary" href="/qc/new">New material test</a>{% endif %}
+    {% if can("production.write") %}<a class="btn" href="/production/new">New production record</a>{% endif %}
+  </div>
+</div>
+
+<div class="tiles">
+  <a class="tile" href="/qc?from={{ week_start }}"><span class="k">QC tests, 7 days</span><span class="v">{{ d.qc7 }}</span></a>
+  <a class="tile {% if d.fail7 %}bad{% endif %}" href="/qc?result=fail&amp;from={{ week_start }}"><span class="k">Out of limit, 7 days</span><span class="v">{{ d.fail7 }}</span></a>
+  <a class="tile {% if d.holds %}warn{% endif %}" href="/qc?decision=On+hold"><span class="k">Lots on hold</span><span class="v">{{ d.holds }}</span></a>
+  <a class="tile" href="/production?from={{ week_start }}"><span class="k">Production records, 7 days</span><span class="v">{{ d.prod7 }}</span></a>
+  <a class="tile {% if d.over7 %}bad{% endif %}" href="/production?status=over&amp;from={{ week_start }}"><span class="k">Over tolerance, 7 days</span><span class="v">{{ d.over7 }}</span></a>
+</div>
+
+{% if not steps|selectattr(1)|list|length == steps|length %}
+<div class="panel">
+  <div class="panel-head"><h2>Getting the plant ready</h2></div>
+  <ol class="steps">{% for text, done in steps %}<li class="{{ 'done' if done }}"><span>{{ text }}</span></li>{% endfor %}</ol>
+</div>
+{% endif %}
+
+<div class="panel">
+  <div class="panel-head"><h2>Needs attention</h2><span class="muted small">Holds, out-of-limit tests, over-tolerance records and lots not accepted</span></div>
+  {% if d["items"] %}
+  <ul class="alist">
+    {% for i in d["items"] %}
+    <li><a href="/{{ 'qc' if i.kind == 'qc' else 'production' }}/{{ i.id }}"><span class="chip {{ i.chip[0] }}">{{ i.chip[1] }}</span><span class="t">{{ i.text }}</span><span class="d">{{ i.date|d }}</span></a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted" style="margin:0">Nothing needs attention. No lots on hold, no out-of-limit tests and no over-tolerance records in the last 7 days.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_macros.html" import delete_form %}
+{% block title %}{{ "Edit test parameter" if p else "Add test parameter" }}{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><h1>{{ "Edit test parameter" if p else "Add test parameter" }}</h1>
+<p class="muted">Enter only the limits stated in your specification. Leave minimum or maximum empty where the specification gives none. Changing a limit does not change tests already recorded.</p></div></div>
+<form class="panel stack" method="post" action="{{ '/setup/parameters/%d' % p.id if p else '/setup/parameters/new' }}" style="max-width:760px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    {% set cur = v.get('material_id', (p.material_id|string) if p else '') %}
+    <label class="f wide"><span>Material</span><select name="material_id" id="t_mat" required><option value="">Select material</option>{% for m in materials %}<option value="{{ m.id }}" {% if cur == m.id|string %}selected{% endif %}>{{ m.name }}</option>{% endfor %}</select></label>
+    <label class="f wide"><span>Parameter</span><input name="name" id="t_name" required value="{{ v.get('name', p.name if p else '') }}" placeholder="Name of the test as written in your specification"></label>
+    <label class="f"><span>Unit</span><input name="unit" id="t_unit" value="{{ v.get('unit', p.unit if p else '') }}"></label>
+    <label class="f"><span>Minimum</span><input name="min_value" id="t_min" inputmode="decimal" class="mono" value="{{ v.get('min_value', p.min_value if p and p.min_value is not none else '') }}"></label>
+    <label class="f"><span>Maximum</span><input name="max_value" id="t_max" inputmode="decimal" class="mono" value="{{ v.get('max_value', p.max_value if p and p.max_value is not none else '') }}"></label>
+    <label class="f"><span>Display order</span><input name="sort_order" id="t_order" inputmode="numeric" value="{{ v.get('sort_order', p.sort_order if p else 0) }}"></label>
+    <label class="f wide"><span>Method / standard reference</span><input name="method" id="t_method" value="{{ v.get('method', p.method if p else '') }}" placeholder="The standard and clause your limit comes from"></label>
+    {% if p %}<label class="check"><input type="checkbox" name="active" id="t_active" {% if p.active %}checked{% endif %}> Active (inactive parameters are not asked for in new tests)</label>{% endif %}
+  </div>
+  <div class="actions"><a class="btn" href="/setup#parameters">Cancel</a><button class="btn primary" type="submit">Save parameter</button></div>
+</form>
+{% if p %}{{ delete_form("/setup/parameters/%d/delete" % p.id, csrf, "Delete parameter") }}{% endif %}
+{% endblock %}

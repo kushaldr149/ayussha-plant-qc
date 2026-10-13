@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}New material test{% endblock %}
+{% block content %}
+<div class="toolbar"><div><h1>New material test</h1><p class="muted">Each value is checked against the limits set for the material in Setup. The limits are saved with the test.</p></div></div>
+<script type="application/json" id="qc-payload">{{ payload|tojson }}</script>
+<script type="application/json" id="qc-values">{{ (values or {})|tojson }}</script>
+<form class="panel stack" method="post" action="/qc/new" id="qc-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f"><span>Test date</span><input type="date" name="test_date" id="q_date" value="{{ form.test_date or today }}" required></label>
+    <label class="f"><span>Material</span><select name="material_id" id="q_mat" required><option value="">Select material</option>{% for m in materials %}<option value="{{ m.id }}" {% if form.material_id == m.id|string %}selected{% endif %}>{{ m.name }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Supplier</span><input name="supplier" id="q_sup" value="{{ form.supplier or '' }}" autocomplete="off"></label>
+    <label class="f"><span>Lot / batch no.</span><input name="lot_no" id="q_lot" class="mono" value="{{ form.lot_no or '' }}" autocomplete="off"></label>
+    <label class="f"><span>Vehicle no.</span><input name="vehicle_no" id="q_veh" class="mono" value="{{ form.vehicle_no or '' }}" autocomplete="off"></label>
+    <div class="two">
+      <label class="f"><span>Quantity received</span><input name="quantity" id="q_qty" inputmode="decimal" value="{{ form.quantity or '' }}"></label>
+      <label class="f"><span>Unit</span><select name="unit" id="q_unit">{% for u in ["t", "kg", "bags", "L", "m³"] %}<option {% if form.unit == u %}selected{% endif %}>{{ u }}</option>{% endfor %}</select></label>
+    </div>
+  </div>
+  <div>
+    <h2>Test results</h2>
+    <div id="q_params" style="margin-top:8px"><p class="muted">Select a material to load its test parameters.</p></div>
+  </div>
+  <div class="fgrid">
+    <div class="f"><span>Overall result</span><div id="q_overall">—</div></div>
+    <label class="f"><span>Decision</span><select name="decision" id="q_dec" required><option value="">Select decision</option>{% for d in DECISIONS %}<option {% if form.decision == d %}selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
+    <label class="f wide"><span>Remarks</span><textarea name="remarks" id="q_rem" rows="3">{{ form.remarks or '' }}</textarea>
+      <span class="hint">Required when accepting a lot with out-of-limit results.</span></label>
+  </div>
+  <div class="actions"><a class="btn" href="/qc">Cancel</a><button class="btn primary" type="submit">Save test</button></div>
+</form>
+{% endblock %}

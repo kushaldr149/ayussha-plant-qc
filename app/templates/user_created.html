@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}One-time password{% endblock %}
+{% block content %}
+<div class="toolbar"><div><h1>One-time password for {{ u.username }}</h1></div></div>
+<div class="panel stack" style="max-width:640px;display:grid;gap:14px">
+  <p style="margin:0">Give this password to {{ u.full_name or u.username }} in person or over the phone. It is shown only once. They will be asked to set their own password when they first sign in.</p>
+  <div class="secret">{{ password }}</div>
+  <div class="actions"><a class="btn primary" href="/users">Done</a></div>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · {{ APP_NAME }}</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="login">
+  <form class="panel" method="post" action="/login">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span><span class="brand-name">{{ APP_NAME }}</span><br><span class="brand-sub">{{ settings.plant_name or "Sign in to continue" }}</span></span>
+    </div>
+    {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label class="f"><span>Username</span><input name="username" id="username" autocomplete="username" value="{{ username or '' }}" required autofocus></label>
+    <label class="f"><span>Password</span><input name="password" id="password" type="password" autocomplete="current-password" required></label>
+    <button class="btn primary" type="submit">Sign in</button>
+    <p class="muted small" style="margin:0">Forgotten your password? Ask your administrator to reset it.</p>
+  </form>
+</div>
+</body>
+</html>

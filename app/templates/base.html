@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{% endblock %} · {{ APP_NAME }}</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+{% if user %}
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/">
+      <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span><span class="brand-name">{{ APP_NAME }}</span><br><span class="brand-sub">{{ settings.plant_name or "Plant name not set" }}</span></span>
+    </a>
+    <div class="who">
+      <span>{{ user.display }}</span><span class="role">{{ ROLES[user.role] }}</span>
+      <a href="/account/password">Change password</a>
+      <form class="inline" method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="linkbtn" type="submit">Sign out</button></form>
+    </div>
+  </div>
+  <div class="wrap">
+    <nav class="sections" aria-label="Sections">
+      {% set nav = [("/", "Overview"), ("/qc", "Material QC"), ("/production", "Production log"), ("/setup", "Setup")] %}
+      {% for href, label in nav %}
+        <a href="{{ href }}" {% if (href == "/" and path == "/") or (href != "/" and path.startswith(href)) %}aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+      {% if can("reports") %}<a href="/reports" {% if path.startswith("/reports") %}aria-current="page"{% endif %}>Reports</a>{% endif %}
+      {% if can("ai.review") %}<a href="/ai" {% if path.startswith("/ai") %}aria-current="page"{% endif %}>AI review</a>{% endif %}
+      {% if can("users.manage") %}<a href="/users" {% if path.startswith("/users") %}aria-current="page"{% endif %}>Users</a>{% endif %}
+      {% if can("audit.view") %}<a href="/audit" {% if path.startswith("/audit") %}aria-current="page"{% endif %}>Audit trail</a>{% endif %}
+    </nav>
+  </div>
+</header>
+{% endif %}
+<main class="wrap">
+  {% for kind, text in messages %}<div class="alert {{ kind }}" role="status">{{ text }}</div>{% endfor %}
+  {% if errors %}<div class="alert error" role="alert"><strong>Please correct the following:</strong><ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>
