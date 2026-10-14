@@ -10,7 +10,7 @@ It runs the same way on a PC or server at the plant (on the plant LAN) or on a c
 
 | Area | Details |
 |---|---|
-| Logins and roles | Administrator, QC / lab, Plant operator, Management (view only). One-time passwords that must be changed at first sign-in. Lockout after 5 failed sign-ins for 15 minutes. |
+| Logins and roles | Administrator, Quality team, Plant operators, Management (view only: sees everything, changes nothing). One-time passwords that must be changed at first sign-in. Lockout after 5 failed sign-ins for 15 minutes. |
 | Setup | Plant settings (company, plant, batching tolerance, product lines, shifts), materials (with stock unit and reorder level), test parameters with limits and method reference, recipes, customers and sites, vehicles, concrete grades with acceptance values. Nothing is pre-filled: all limits, tolerances and acceptance values come from your specifications. |
 | Material QC | Test per lot: each value marked within limits or out of limit. Decision: Accepted, On hold or Rejected. An out-of-limit lot can only be accepted with a written remark. Limits are copied onto the test, so later changes in Setup never rewrite past tests. |
 | Production log | Planned against actual weight per material, deviation %, tolerance check, bags and weights. Each material's lot is matched to its QC test; lots on hold, rejected or never tested are flagged. |

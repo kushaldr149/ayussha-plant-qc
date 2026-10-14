@@ -234,7 +234,7 @@ def batch_certificate_pdf(record: ProductionRecord, settings: PlantSettings, tes
         "decision on each lot at the time of production. It does not by itself certify compliance with a standard "
         "or specification."), st["small"]))
     story.append(Spacer(1, 22 * mm))
-    story.append(_signatures(["Plant operator", "QC / lab", "Approved by (Quality)"], st))
+    story.append(_signatures(["Plant operator", "Quality team", "Approved by (Quality)"], st))
     return _build(story, f"Batch Traceability Certificate {record.record_no}",
                   f"{config.APP_NAME} · {record.record_no} · generated {_generated()}")
 

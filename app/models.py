@@ -21,9 +21,9 @@ def utcnow() -> datetime:
 
 ROLES = {
     "admin": "Administrator",
-    "qc": "QC / lab",
-    "operator": "Plant operator",
-    "management": "Management (view only)",
+    "qc": "Quality team",
+    "operator": "Plant operators",
+    "management": "Management",
 }
 
 DECISIONS = ["Accepted", "On hold", "Rejected"]
