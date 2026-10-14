@@ -124,6 +124,12 @@ _UNIT_FACTORS = {
 }
 
 
+def unit_kind(unit: str) -> str | None:
+    """'mass' for kg/t, 'volume' for L/mL, None for anything else (for example bags)."""
+    f = _UNIT_FACTORS.get((unit or "").strip().lower())
+    return f[0] if f else None
+
+
 def convert(quantity: float | None, from_unit: str, to_unit: str) -> float | None:
     """Convert between kg/t and L/mL. Same unit returns the quantity. Anything else returns None."""
     if quantity is None:

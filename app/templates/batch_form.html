@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}New {{ o.label|lower }} batch{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/process">Plant process</a></p><h1>New {{ o.label|lower }} batch</h1>
+<p class="muted">{% if o.kind == "coating" %}Record the coarse aggregate lots coated and the coating material lots used (microsilica, Alccofine…). The coating dosage is calculated from the masses.{% else %}Record the lots of one material fed to the grinding mill and the ground output. Each material is ground separately.{% endif %} The output gets its own lot number and stays on hold until QC makes a decision. Lots that are not accepted need a remark.</p></div></div>
+<form class="panel stack" method="post" action="/process/{{ o.kind }}/new">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f"><span>Batch date</span><input type="date" name="batch_date" id="b_date" required value="{{ v.get('batch_date') or today }}"></label>
+    <label class="f"><span>Shift</span><input name="shift" id="b_shift" value="{{ v.get('shift', '') }}"></label>
+    <label class="f"><span>{{ "Coating unit" if o.kind == "coating" else "Grinding mill" }} (equipment)</span><select name="equipment_id" id="b_eq"><option value="">Not recorded</option>{% for e in o.equipment %}<option value="{{ e.id }}" {% if v.get('equipment_id') == e.id|string %}selected{% endif %}>{{ e.tag }} · {{ e.name }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Output material ({{ o.output_category }})</span><select name="output_material_id" id="b_out" required><option value="">Select</option>{% for m in o.outputs %}<option value="{{ m.id }}" {% if v.get('output_material_id') == m.id|string %}selected{% endif %}>{{ m.name }}</option>{% endfor %}</select>
+      {% if not o.outputs %}<span class="hint">None yet. Add it in Setup → Add standard materials → In-house products.</span>{% endif %}</label>
+    <label class="f"><span>Output quantity</span><input name="output_qty" id="b_qty" inputmode="decimal" class="mono" value="{{ v.get('output_qty', '') }}"></label>
+    <label class="f"><span>Output unit</span><select name="output_unit" id="b_unit">{% for u in ["kg", "t"] %}<option {% if v.get('output_unit', 'kg') == u %}selected{% endif %}>{{ u }}</option>{% endfor %}</select></label>
+    {% if o.kind == "grinding" %}
+    <label class="f"><span>Fineness, Blaine (m²/kg)</span><input name="blaine" id="b_blaine" inputmode="decimal" class="mono" value="{{ v.get('blaine', '') }}"><span class="hint">Optional. As measured on the output, IS 4031 (Part 2).</span></label>
+    <label class="f"><span>Residue on 45 µm sieve (%)</span><input name="residue45" id="b_res" inputmode="decimal" class="mono" value="{{ v.get('residue45', '') }}"><span class="hint">Optional.</span></label>
+    {% endif %}
+  </div>
+  <div>
+    <h2 style="margin-bottom:8px">Input lots</h2>
+    <div class="tablewrap"><table class="data">
+      <thead><tr><th>Input</th><th>Lot</th><th class="num">Quantity</th><th>Unit</th></tr></thead>
+      <tbody>
+      {% for n in range(lines) %}{% set it = inputs[n] if n < inputs|length else {} %}
+        {% set role = it.get('role') or (o.roles|list)[0 if n < 3 or o.roles|length == 1 else 1] %}
+        <tr><td><select name="in-{{ n }}-role" aria-label="Input type line {{ n + 1 }}">{% for r, label in o.roles.items() %}<option value="{{ r }}" {% if role == r %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></td>
+          <td><select name="in-{{ n }}-lot" aria-label="Lot line {{ n + 1 }}"><option value="">—</option>
+            {% for r, label in o.roles.items() %}<optgroup label="{{ label }}">{% for lt in o.lots[r] %}<option value="{{ lt.key }}" {% if it.get('lot') == lt.key %}selected{% endif %}>{{ lt.label }}</option>{% endfor %}</optgroup>{% endfor %}</select></td>
+          <td class="num"><input name="in-{{ n }}-qty" inputmode="decimal" class="mono" style="max-width:120px" aria-label="Quantity line {{ n + 1 }}" value="{{ it.get('qty', '') }}"></td>
+          <td><select name="in-{{ n }}-unit" aria-label="Unit line {{ n + 1 }}">{% for u in ["kg", "t"] %}<option {% if it.get('unit', 'kg') == u %}selected{% endif %}>{{ u }}</option>{% endfor %}</select></td></tr>
+      {% endfor %}
+      </tbody></table></div>
+    <p class="small muted" style="margin:6px 0 0">Lots come from Material QC (inward tests). Empty lines are ignored. Balance is the stock left in that lot.</p>
+  </div>
+  <label class="f"><span>Remarks</span><textarea name="remarks" id="b_rem" rows="2">{{ v.get('remarks', '') }}</textarea></label>
+  <div class="actions"><a class="btn" href="/process">Cancel</a><button class="btn primary" type="submit">Save batch</button></div>
+</form>
+{% endblock %}

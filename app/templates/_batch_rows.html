@@ -1,0 +1,9 @@
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Batch / output lot</th><th>Date</th><th>Process</th><th>Output</th><th class="num">Output qty</th><th>Inputs</th><th>Decision</th></tr></thead>
+  <tbody>{% for b in batches %}
+    <tr><td class="mono"><a class="rowlink" href="/process/batches/{{ b.id }}">{{ b.batch_no }}</a></td><td class="nowrap">{{ b.batch_date|d }}</td>
+      <td>{{ PROCESS_KINDS[b.kind] }}</td><td>{{ b.output_material_name }}</td>
+      <td class="num mono">{% if b.output_qty is not none %}{{ b.output_qty|num }} {{ b.output_unit }}{% else %}—{% endif %}</td>
+      <td class="small">{% for i in b.inputs %}{{ i.material_name }} · {{ i.lot_no or "—" }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+      <td>{{ dec_chip(b.decision) }}{% if b.lot_issue %}<div style="margin-top:4px"><span class="chip hold">Lot not accepted</span></div>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="7" class="empty">No coating or grinding batches yet.</td></tr>{% endfor %}</tbody></table></div>

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "_macros.html" import dec_chip, pack_chip, prod_chip %}
+{% block title %}{{ p.pack_no }}{% endblock %}
+{% block content %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/process">Plant process</a> · {{ p.kind }}</p><h1 class="mono">{{ p.pack_no }}</h1></div>
+  <div class="row">
+    <a class="btn primary" href="/packs/{{ p.id }}/label.pdf?size=a6" target="_blank" rel="noopener">Print label (A6)</a>
+    <a class="btn" href="/packs/{{ p.id }}/label.pdf?size=100x150" target="_blank" rel="noopener">Label 100 × 150 mm</a>
+    <a class="btn" href="/packs/{{ p.id }}/label.pdf?size=a4" target="_blank" rel="noopener">Label A4</a>
+    <a class="btn ghost" href="/packs?order={{ p.order_id }}">Bags of this order</a></div></div>
+<div class="grid2">
+  <div class="panel"><dl class="kv">
+    <dt>Status</dt><dd>{{ pack_chip(p.status) }}</dd>
+    <dt>Order</dt><dd><a class="mono" href="/orders/{{ p.order_id }}">{{ p.order.order_no }}</a> · {{ p.order.customer.name }}{% if p.order.site %} · {{ p.order.site.name }}{% endif %}</dd>
+    <dt>Grade</dt><dd>{{ p.order.grade.name if p.order.grade else "—" }}</dd>
+    <dt>Mix design</dt><dd>{{ p.recipe_name or "—" }}</dd>
+    <dt>Packed</dt><dd>{{ p.pack_date|d }} <span class="muted small">by {{ p.created_by.display if p.created_by else "—" }}</span></dd>
+    <dt>Net / gross</dt><dd class="mono">{{ (p.net_kg|num ~ " kg") if p.net_kg is not none else "—" }} / {{ (p.gross_kg|num ~ " kg") if p.gross_kg is not none else "—" }}</dd>
+    <dt>Batching</dt><dd>{{ prod_chip(p.batching_status) }}{% if p.max_abs_dev_pct is not none %} <span class="muted small">largest deviation {{ "%.2f"|format(p.max_abs_dev_pct) }} %{% if p.tolerance_pct is not none %}, tolerance ±{{ p.tolerance_pct|num }} %{% endif %}</span>{% endif %}</dd>
+    {% if p.dispatch %}<dt>Dispatch</dt><dd><a class="mono" href="/dispatch/{{ p.dispatch.id }}">{{ p.dispatch.dispatch_no }}</a> · {{ p.dispatch.dispatch_date|d }}</dd>{% endif %}
+    {% if p.site_mix %}<dt>Mixed at site</dt><dd><a class="mono" href="/site-mix/{{ p.site_mix.id }}">{{ p.site_mix.mix_no }}</a> · {{ p.site_mix.mix_date|d }}</dd>{% endif %}
+    {% if p.remarks %}<dt>Remarks</dt><dd style="white-space:pre-wrap">{{ p.remarks }}</dd>{% endif %}
+  </dl></div>
+  <div class="panel">
+    <h2 style="margin-bottom:10px">Reject or release</h2>
+    {% if can("process.decide") and p.status in ["Packed", "Returned", "Rejected"] %}
+    <form class="stack" method="post" action="/packs/{{ p.id }}/status">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label class="f"><span>Mark as</span><select name="status" id="ps_status">{% for s in ["Rejected", "Packed"] %}<option {% if s != p.status and loop.first %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+      <label class="f"><span>Reason</span><textarea name="remark" id="ps_rem" rows="2" required></textarea></label>
+      <div class="actions"><button class="btn" type="submit">Save</button></div>
+    </form>
+    {% else %}<p class="muted" style="margin:0">{% if p.status in ["Loaded", "Used at site"] %}This bag has left the plant.{% else %}QC can reject or release a bag that is in the plant.{% endif %}</p>{% endif %}
+  </div>
+</div>
+<div class="panel">
+  <h2 style="margin-bottom:8px">Contents and lot traceability</h2>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Material</th><th>Lot</th><th>Lot source</th><th>Lot decision at packing</th><th class="num">Planned</th><th class="num">Packed</th><th class="num">Deviation</th></tr></thead>
+    <tbody>{% for it in p.items %}
+      <tr><td>{{ it.material_name }}</td>
+        <td class="mono">{{ it.lot_no or "—" }}</td>
+        <td class="small">{% if it.lot_test_id and tests.get(it.lot_test_id) %}{% set t = tests[it.lot_test_id] %}Inward QC <a class="mono" href="/qc/{{ t.id }}">{{ t.test_no }}</a>{% if t.supplier %} · {{ t.supplier }}{% endif %}
+          {% elif it.batch_id and batches.get(it.batch_id) %}{% set b = batches[it.batch_id] %}{{ b.kind|capitalize }} batch <a class="mono" href="/process/batches/{{ b.id }}">{{ b.batch_no }}</a>{% else %}—{% endif %}</td>
+        <td>{{ dec_chip(it.lot_decision) }}</td>
+        <td class="num mono">{{ (it.planned|num ~ " " ~ it.unit) if it.planned is not none else "—" }}</td>
+        <td class="num mono">{{ it.actual|num }} {{ it.unit }}</td>
+        <td class="num mono">{{ ("%+.2f"|format(it.dev_pct) ~ " %") if it.dev_pct is not none else "—" }}</td></tr>
+    {% endfor %}</tbody></table></div>
+</div>
+{% endblock %}

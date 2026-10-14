@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Find a bag{% endblock %}
+{% block content %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/process">Plant process</a></p><h1>Find a bag or barrel</h1>
+<p class="muted">Scanning the QR code on a label with a phone opens the bag's page directly. A handheld scanner that types the code, or typing the number printed on the label, works here.</p></div></div>
+<form class="panel stack" method="get" action="/packs/scan" style="max-width:520px">
+  <label class="f"><span>Bag or barrel number</span><input name="code" id="scan_code" class="mono" value="{{ code }}" autofocus placeholder="BAG-20261014-0001"></label>
+  <div class="actions"><button class="btn primary" type="submit">Open</button></div>
+</form>
+{% endblock %}

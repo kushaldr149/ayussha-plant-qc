@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_macros.html" import dec_chip, res_chip, pack_chip %}
+{% block title %}{{ b.batch_no }}{% endblock %}
+{% block content %}
+<div class="toolbar"><div><p class="muted mono" style="margin:0"><a href="/process">Plant process</a> · {{ b.batch_no }}</p><h1>{{ PROCESS_KINDS[b.kind] }}: {{ b.output_material_name }}</h1></div>
+  <div class="row"><a class="btn ghost" href="/process/batches">All batches</a></div></div>
+<div class="grid2">
+  <div class="panel"><dl class="kv">
+    <dt>Batch date</dt><dd>{{ b.batch_date|d }}{% if b.shift %} · {{ b.shift }}{% endif %}</dd>
+    <dt>Output lot no.</dt><dd class="mono">{{ b.output_lot_no }}</dd>
+    <dt>Output</dt><dd>{{ b.output_material_name }}{% if b.output_qty is not none %} · <span class="mono">{{ b.output_qty|num }} {{ b.output_unit }}</span>{% endif %}</dd>
+    {% if b.kind == "coating" %}<dt>Coating dosage</dt><dd class="mono">{% if b.coating_pct is not none %}{{ "%.3f"|format(b.coating_pct) }} % of aggregate mass{% else %}—{% endif %}</dd>{% endif %}
+    {% if b.kind == "grinding" %}<dt>Blaine fineness</dt><dd class="mono">{{ (b.blaine_m2kg|num ~ " m²/kg") if b.blaine_m2kg is not none else "—" }}</dd>
+    <dt>Residue on 45 µm</dt><dd class="mono">{{ (b.residue45_pct|num ~ " %") if b.residue45_pct is not none else "—" }}</dd>{% endif %}
+    <dt>Equipment</dt><dd>{{ (b.equipment.tag ~ " · " ~ b.equipment.name) if b.equipment else "—" }}</dd>
+    <dt>Entered by</dt><dd>{{ b.created_by.display if b.created_by else "—" }} <span class="muted small">· {{ b.created_at|dt }}</span></dd>
+    <dt>Decision</dt><dd>{{ dec_chip(b.decision) }}{% if b.decision_by %} <span class="muted small">by {{ b.decision_by.display }} · {{ b.decision_at|dt }}</span>{% endif %}</dd>
+    {% if b.qc_test %}<dt>QC test of output</dt><dd><a class="mono" href="/qc/{{ b.qc_test.id }}">{{ b.qc_test.test_no }}</a> {{ res_chip(b.qc_test.overall) }}</dd>{% endif %}
+    {% if b.remarks %}<dt>Remarks</dt><dd style="white-space:pre-wrap">{{ b.remarks }}</dd>{% endif %}
+  </dl></div>
+  <div class="panel">
+    <h2 style="margin-bottom:10px">Decision on the output lot</h2>
+    {% if can("process.decide") %}
+    <form class="stack" method="post" action="/process/batches/{{ b.id }}/decision">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label class="f"><span>Decision</span><select name="decision" id="bd_dec">{% for d in DECISIONS %}<option {% if d == b.decision %}selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
+      <label class="f"><span>QC test of the output (optional)</span><select name="qc_test_id" id="bd_test"><option value="">None</option>{% for t in tests %}<option value="{{ t.id }}" {% if b.qc_test_id == t.id %}selected{% endif %}>{{ t.test_no }} · lot {{ t.lot_no or "—" }} · {{ t.test_date|d }} · {{ STATUS.get(t.overall, t.overall) }}</option>{% endfor %}</select>
+        <span class="hint">Record it in Material QC for material {{ b.output_material_name }} with lot no. {{ b.output_lot_no }}.</span></label>
+      <label class="f"><span>Remarks</span><textarea name="remarks" id="bd_rem" rows="3"></textarea></label>
+      <div class="actions"><button class="btn primary" type="submit">Save decision</button></div>
+    </form>
+    {% else %}<p class="muted" style="margin:0">QC records the decision.</p>{% endif %}
+  </div>
+</div>
+<div class="panel">
+  <h2 style="margin-bottom:8px">Input lots</h2>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Input</th><th>Material</th><th>Lot</th><th>Lot decision at use</th><th class="num">Quantity</th></tr></thead>
+    <tbody>{% for i in b.inputs %}
+      <tr><td>{{ roles.get(i.role, i.role) }}</td><td>{{ i.material_name }}</td>
+        <td class="mono">{% if i.lot_test_id %}<a href="/qc/{{ i.lot_test_id }}">{{ i.lot_no or "—" }}</a>{% else %}{{ i.lot_no or "—" }}{% endif %}</td>
+        <td>{{ dec_chip(i.lot_decision) }}</td><td class="num mono">{{ i.qty|num }} {{ i.unit }}</td></tr>
+    {% endfor %}</tbody></table></div>
+</div>
+<div class="panel">
+  <div class="panel-head"><h2>Packed into</h2><span class="muted small">Bags that contain this output lot</span></div>
+  {% if used %}<ul class="alist">{% for it in used %}<li><a href="/packs/{{ it.pack.id }}"><span class="mono">{{ it.pack.pack_no }}</span><span class="t">{{ it.pack.kind }} · {{ it.actual|num }} {{ it.unit }}</span><span class="d">{{ it.pack.pack_date|d }}</span></a></li>{% endfor %}</ul>
+  {% else %}<p class="muted" style="margin:0">Not packed yet.</p>{% endif %}
+</div>
+{% endblock %}

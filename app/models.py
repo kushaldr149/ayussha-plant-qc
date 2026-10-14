@@ -34,6 +34,9 @@ CATEGORIES = [
     "Coarse aggregate",
     "Fine aggregate",
     "Coating material",
+    "Coated aggregate",
+    "Ground cementitious material",
+    "Fibre",
     "Admixture",
     "Water",
     "Packaging",
@@ -338,6 +341,8 @@ class Order(Base):
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     site_id: Mapped[int | None] = mapped_column(ForeignKey("sites.id"), nullable=True)
     grade_id: Mapped[int | None] = mapped_column(ForeignKey("concrete_grades.id"), nullable=True)
+    # Mix design for the bags packed for this order: kg of each material per bag set (a recipe in Setup).
+    recipe_id: Mapped[int | None] = mapped_column(ForeignKey("recipes.id"), nullable=True)
     quantity_m3: Mapped[float | None] = mapped_column(Float, nullable=True)
     required_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     customer_ref: Mapped[str] = mapped_column(String(80), default="")
@@ -349,6 +354,7 @@ class Order(Base):
     customer: Mapped[Customer] = relationship()
     site: Mapped[Site | None] = relationship()
     grade: Mapped[ConcreteGrade | None] = relationship()
+    recipe: Mapped[Recipe | None] = relationship()
     dispatches: Mapped[list["Dispatch"]] = relationship(back_populates="order", order_by="Dispatch.dispatch_date")
 
 
@@ -537,3 +543,167 @@ class Calibration(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     equipment: Mapped[Equipment] = relationship(back_populates="calibrations")
+
+
+# ================================================================ plant process: coating, grinding, packing, site mixing
+
+PROCESS_KINDS = {"coating": "Coating", "grinding": "Grinding"}
+# Material categories allowed as inputs and as the output of each process.
+PROCESS_INPUTS = {
+    "coating": {"aggregate": ("Coarse aggregate",), "coating": ("Coating material", "Supplementary cementitious material")},
+    "grinding": {"feed": ("Cement", "Supplementary cementitious material")},
+}
+PROCESS_OUTPUT = {"coating": "Coated aggregate", "grinding": "Ground cementitious material"}
+
+# What each package may contain, by material category.
+PACK_KINDS = {
+    "Aggregate jumbo bag": ("Coated aggregate", "Coarse aggregate", "Fine aggregate"),
+    "Cementitious jumbo bag": ("Cement", "Supplementary cementitious material", "Ground cementitious material"),
+    "Fibre bag": ("Fibre",),
+    "Admixture barrel": ("Admixture",),
+}
+PACK_STATUSES = ["Packed", "Loaded", "Used at site", "Returned", "Rejected"]
+
+
+class ProcessBatch(Base):
+    """One coating or grinding run. Its output is a lot of an in-house material with its own decision."""
+    __tablename__ = "process_batches"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    batch_no: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True)
+    batch_date: Mapped[date] = mapped_column(Date, index=True)
+    shift: Mapped[str] = mapped_column(String(40), default="")
+    equipment_id: Mapped[int | None] = mapped_column(ForeignKey("equipment.id"), nullable=True)
+    output_material_id: Mapped[int] = mapped_column(ForeignKey("materials.id"))
+    output_material_name: Mapped[str] = mapped_column(String(160))
+    output_lot_no: Mapped[str] = mapped_column(String(80), index=True)
+    output_qty: Mapped[float | None] = mapped_column(Float, nullable=True)
+    output_unit: Mapped[str] = mapped_column(String(20), default="kg")
+    coating_pct: Mapped[float | None] = mapped_column(Float, nullable=True)   # coating mass / aggregate mass × 100
+    blaine_m2kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    residue45_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lot_issue: Mapped[bool] = mapped_column(Boolean, default=False)
+    decision: Mapped[str] = mapped_column(String(30), default="On hold", index=True)
+    decision_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    decision_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    qc_test_id: Mapped[int | None] = mapped_column(ForeignKey("qc_tests.id"), nullable=True)
+    remarks: Mapped[str] = mapped_column(Text, default="")
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    inputs: Mapped[list["ProcessInput"]] = relationship(back_populates="batch", cascade="all, delete-orphan",
+                                                        order_by="ProcessInput.id")
+    equipment: Mapped[Equipment | None] = relationship()
+    output_material: Mapped[Material] = relationship()
+    qc_test: Mapped[QCTest | None] = relationship()
+    created_by: Mapped[User | None] = relationship(foreign_keys=[created_by_id])
+    decision_by: Mapped[User | None] = relationship(foreign_keys=[decision_by_id])
+
+
+class ProcessInput(Base):
+    __tablename__ = "process_inputs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey("process_batches.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(20))          # aggregate / coating / feed
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id"))
+    material_name: Mapped[str] = mapped_column(String(160))
+    lot_no: Mapped[str] = mapped_column(String(80), default="", index=True)
+    lot_decision: Mapped[str] = mapped_column(String(30), default="")
+    lot_test_id: Mapped[int | None] = mapped_column(ForeignKey("qc_tests.id"), nullable=True)
+    qty: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(20), default="kg")
+
+    batch: Mapped[ProcessBatch] = relationship(back_populates="inputs")
+
+
+class Pack(Base):
+    """One jumbo bag, fibre bag or admixture barrel, packed for an order. Traced to its lots by its items."""
+    __tablename__ = "packs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pack_no: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    kind: Mapped[str] = mapped_column(String(40), index=True)
+    pack_date: Mapped[date] = mapped_column(Date, index=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), index=True)
+    recipe_id: Mapped[int | None] = mapped_column(ForeignKey("recipes.id"), nullable=True)
+    recipe_name: Mapped[str] = mapped_column(String(160), default="")
+    net_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gross_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tolerance_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_abs_dev_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    batching_status: Mapped[str] = mapped_column(String(20), default="nodata")   # ok / over / notol / nodata
+    lot_issue: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(20), default="Packed", index=True)
+    dispatch_id: Mapped[int | None] = mapped_column(ForeignKey("dispatches.id"), nullable=True, index=True)
+    site_mix_id: Mapped[int | None] = mapped_column(ForeignKey("site_mixes.id"), nullable=True, index=True)
+    remarks: Mapped[str] = mapped_column(Text, default="")
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    items: Mapped[list["PackItem"]] = relationship(back_populates="pack", cascade="all, delete-orphan",
+                                                   order_by="PackItem.id")
+    order: Mapped[Order] = relationship()
+    dispatch: Mapped[Dispatch | None] = relationship()
+    site_mix: Mapped["SiteMix | None"] = relationship(back_populates="packs", foreign_keys=[site_mix_id])
+    created_by: Mapped[User | None] = relationship()
+
+
+class PackItem(Base):
+    __tablename__ = "pack_items"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    pack_id: Mapped[int] = mapped_column(ForeignKey("packs.id", ondelete="CASCADE"), index=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id"))
+    material_name: Mapped[str] = mapped_column(String(160))
+    lot_no: Mapped[str] = mapped_column(String(80), default="", index=True)
+    lot_decision: Mapped[str] = mapped_column(String(30), default="")
+    lot_test_id: Mapped[int | None] = mapped_column(ForeignKey("qc_tests.id"), nullable=True)
+    batch_id: Mapped[int | None] = mapped_column(ForeignKey("process_batches.id"), nullable=True)
+    planned: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(20), default="kg")
+    dev_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    pack: Mapped[Pack] = relationship(back_populates="items")
+
+
+class SiteMix(Base):
+    """What the mixer on wheels mixed at site from one dispatch."""
+    __tablename__ = "site_mixes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mix_no: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    dispatch_id: Mapped[int] = mapped_column(ForeignKey("dispatches.id"), index=True)
+    mix_date: Mapped[date] = mapped_column(Date, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    element: Mapped[str] = mapped_column(String(200), default="")
+    volume_m3: Mapped[float | None] = mapped_column(Float, nullable=True)
+    water_l: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mixing_time_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    slump_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    flow_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    concrete_temp_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ambient_temp_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cube_sample_id: Mapped[int | None] = mapped_column(ForeignKey("cube_samples.id"), nullable=True)
+    supervisor: Mapped[str] = mapped_column(String(120), default="")
+    remarks: Mapped[str] = mapped_column(Text, default="")
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    dispatch: Mapped[Dispatch] = relationship()
+    packs: Mapped[list[Pack]] = relationship(back_populates="site_mix", foreign_keys="Pack.site_mix_id",
+                                             order_by="Pack.pack_no")
+    admixtures: Mapped[list["SiteMixAdmixture"]] = relationship(back_populates="mix", cascade="all, delete-orphan",
+                                                                order_by="SiteMixAdmixture.id")
+    cube_sample: Mapped[CubeSample | None] = relationship()
+    created_by: Mapped[User | None] = relationship()
+
+
+class SiteMixAdmixture(Base):
+    __tablename__ = "site_mix_admixtures"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mix_id: Mapped[int] = mapped_column(ForeignKey("site_mixes.id", ondelete="CASCADE"), index=True)
+    pack_id: Mapped[int] = mapped_column(ForeignKey("packs.id"))
+    dose: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(20), default="kg")
+
+    mix: Mapped[SiteMix] = relationship(back_populates="admixtures")
+    pack: Mapped[Pack] = relationship()

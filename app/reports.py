@@ -323,7 +323,7 @@ def _dt_local(value) -> str:
     return value.replace(tzinfo=_tz.utc).astimezone(config.TZ).strftime("%d %b %Y %H:%M")
 
 
-def delivery_note_pdf(disp, settings: PlantSettings) -> bytes:
+def delivery_note_pdf(disp, settings: PlantSettings, packs=None) -> bytes:
     st = _styles()
     order = disp.order
     story = _header(settings, "Delivery Note", disp.dispatch_no, st)
@@ -338,25 +338,38 @@ def delivery_note_pdf(disp, settings: PlantSettings) -> bytes:
         ("Driver", (disp.driver_name or "—") + (f" · {disp.driver_phone}" if disp.driver_phone else "")),
         ("Departed", _dt_local(disp.departed_at)),
     ], st))
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("Bags loaded", st["h"]))
-    data = [[Paragraph(_t(h), st["cellb"]) for h in ("Production record", "Production date", "Product line", "Bags")]]
-    total = 0
-    for it in disp.items:
-        p = it.production
-        total += it.bags
-        data.append([Paragraph(_t(p.record_no), st["cell"]), Paragraph(_t(p.prod_date.strftime("%d %b %Y")), st["cell"]),
-                     Paragraph(_t(p.product_line), st["cell"]), Paragraph(_t(str(it.bags)), st["cell"])])
-    data.append([Paragraph("Total", st["cellb"]), "", "", Paragraph(_t(str(total)), st["cellb"])])
-    story.append(_grid(data, [50 * mm, 35 * mm, 70 * mm, 25 * mm], st, right_cols=(3,)))
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("Material lots in these bags", st["h"]))
-    lots = [[Paragraph(_t(h), st["cellb"]) for h in ("Production record", "Material", "Lot no.", "Lot QC decision")]]
-    for it in disp.items:
-        for c in it.production.components:
-            lots.append([Paragraph(_t(it.production.record_no), st["cell"]), Paragraph(_t(c.material_name), st["cell"]),
-                         Paragraph(_t(c.lot_no or "—"), st["cell"]), Paragraph(_t(c.lot_decision or "—"), st["cell"])])
-    story.append(_grid(lots, [45 * mm, 60 * mm, 40 * mm, 35 * mm], st))
+    if packs:
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph("Jumbo bags, fibre bags and barrels loaded", st["h"]))
+        rows = [[Paragraph(_t(h), st["cellb"]) for h in ("Bag / barrel", "Type", "Contents (lot)", "Net kg")]]
+        for pk in packs:
+            contents = "<br/>".join(_t(f"{it.material_name} {it.actual:g} {it.unit} (lot {it.lot_no or '—'})") for it in pk.items)
+            rows.append([Paragraph(_t(pk.pack_no), st["cell"]), Paragraph(_t(pk.kind), st["cell"]),
+                         Paragraph(contents, st["cell"]),
+                         Paragraph(_t(_num(pk.net_kg) if pk.net_kg is not None else "—"), st["cell"])])
+        rows.append([Paragraph("Total", st["cellb"]), Paragraph(_t(f"{len(packs)} item(s)"), st["cellb"]), "",
+                     Paragraph(_t(_num(sum(pk.net_kg or 0 for pk in packs))), st["cellb"])])
+        story.append(_grid(rows, [38 * mm, 36 * mm, 84 * mm, 22 * mm], st, right_cols=(3,)))
+    if disp.items:
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph("Bags loaded", st["h"]))
+        data = [[Paragraph(_t(h), st["cellb"]) for h in ("Production record", "Production date", "Product line", "Bags")]]
+        total = 0
+        for it in disp.items:
+            p = it.production
+            total += it.bags
+            data.append([Paragraph(_t(p.record_no), st["cell"]), Paragraph(_t(p.prod_date.strftime("%d %b %Y")), st["cell"]),
+                         Paragraph(_t(p.product_line), st["cell"]), Paragraph(_t(str(it.bags)), st["cell"])])
+        data.append([Paragraph("Total", st["cellb"]), "", "", Paragraph(_t(str(total)), st["cellb"])])
+        story.append(_grid(data, [50 * mm, 35 * mm, 70 * mm, 25 * mm], st, right_cols=(3,)))
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph("Material lots in these bags", st["h"]))
+        lots = [[Paragraph(_t(h), st["cellb"]) for h in ("Production record", "Material", "Lot no.", "Lot QC decision")]]
+        for it in disp.items:
+            for c in it.production.components:
+                lots.append([Paragraph(_t(it.production.record_no), st["cell"]), Paragraph(_t(c.material_name), st["cell"]),
+                             Paragraph(_t(c.lot_no or "—"), st["cell"]), Paragraph(_t(c.lot_decision or "—"), st["cell"])])
+        story.append(_grid(lots, [45 * mm, 60 * mm, 40 * mm, 35 * mm], st))
     if disp.remarks:
         story.append(Paragraph("Remarks", st["h"]))
         story.append(Paragraph(_t(disp.remarks).replace("\n", "<br/>"), st["body"]))
@@ -430,3 +443,118 @@ def table_excel(sheet: str, headers: list[str], rows: list[list], date_cols: tup
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
+
+
+# ================================================================ bag and barrel labels (QR code)
+
+LABEL_PAGE = {"a6": (105 * mm, 148 * mm), "a5": (148 * mm, 210 * mm), "a4": (210 * mm, 297 * mm),
+              "100x150": (100 * mm, 150 * mm)}
+
+
+def _plain(text) -> str:
+    s = "" if text is None else str(text)
+    if not _UNICODE:
+        s = s.replace("≥", ">=").replace("≤", "<=").replace("–", "-").replace("—", "-").replace("³", "3").replace("µ", "u")
+    return s
+
+
+def pack_labels_pdf(packs, settings: PlantSettings, base_url: str, size: str = "a6") -> bytes:
+    """One label per page: bag number, QR code linking to the bag's page, order, contents with lots."""
+    from reportlab.graphics import renderPDF
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.pdfgen import canvas
+
+    w, h = LABEL_PAGE.get(size, LABEL_PAGE["a6"])
+    k = w / (105 * mm)                       # scale text with the label width
+    m = 6 * mm * k
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(w, h))
+    c.setTitle("Bag labels")
+    for p in packs:
+        o = p.order
+        y = h - m
+        c.setFillColor(INK)
+        c.setFont(_BOLD, 8.5 * k)
+        c.drawString(m, y - 8 * k, _plain(settings.company_name or config.APP_NAME))
+        c.setFont(_FONT, 7.5 * k)
+        c.setFillColor(MUTED)
+        c.drawRightString(w - m, y - 8 * k, _plain(p.kind))
+        y -= 14 * k
+        c.setStrokeColor(LINE)
+        c.line(m, y, w - m, y)
+        # QR code at the top right, bag number at the top left
+        qr_size = min(w * 0.42, 46 * mm * k)
+        url = f"{base_url}/packs/{p.id}"
+        widget = QrCodeWidget(url, barLevel="M")
+        b = widget.getBounds()
+        d = Drawing(qr_size, qr_size, transform=[qr_size / (b[2] - b[0]), 0, 0, qr_size / (b[3] - b[1]), 0, 0])
+        d.add(widget)
+        c.setFillColor(INK)
+        size_no = 15 * k
+        while c.stringWidth(_plain(p.pack_no), _BOLD, size_no) > w - 2 * m and size_no > 8:
+            size_no -= 0.5
+        c.setFont(_BOLD, size_no)
+        c.drawString(m, y - 18 * k, _plain(p.pack_no))
+        y -= 24 * k
+        renderPDF.draw(d, c, w - m - qr_size, y - qr_size)
+        lines = [("Order", o.order_no if o else "—"), ("Customer", o.customer.name if o and o.customer else "—"),
+                 ("Site", o.site.name if o and o.site else "—"), ("Grade", o.grade.name if o and o.grade else "—"),
+                 ("Mix design", p.recipe_name or "—"), ("Packed", f"{p.pack_date:%d %b %Y}")]
+        ty = y - 10 * k
+        left_w = w - 2 * m - qr_size - 4 * k
+        for label, value in lines:
+            c.setFont(_FONT, 6.5 * k)
+            c.setFillColor(MUTED)
+            c.drawString(m, ty, _plain(label))
+            c.setFont(_BOLD, 8 * k)
+            c.setFillColor(INK)
+            text = _plain(value)
+            while c.stringWidth(text, _BOLD, 8 * k) > left_w - 20 * mm * k and len(text) > 4:
+                text = text[:-2]
+            c.drawString(m + 20 * mm * k, ty, text if text == _plain(value) else text + "…")
+            ty -= 10.5 * k
+        y = min(ty, y - qr_size) - 6 * k
+        c.setStrokeColor(LINE)
+        c.line(m, y, w - m, y)
+        # contents
+        y -= 10 * k
+        c.setFont(_BOLD, 7 * k)
+        c.setFillColor(MUTED)
+        cols = [m, m + (w - 2 * m) * 0.48, w - m]
+        c.drawString(cols[0], y, "MATERIAL")
+        c.drawString(cols[1], y, "LOT")
+        c.drawRightString(cols[2], y, "QUANTITY")
+        y -= 3 * k
+        c.line(m, y, w - m, y)
+        c.setFillColor(INK)
+        for it in p.items:
+            y -= 10 * k
+            if y < m + 30 * k:
+                c.setFont(_FONT, 7 * k)
+                c.drawString(m, y, "… more lines on the bag record (scan the code)")
+                break
+            c.setFont(_FONT, 8 * k)
+            name = _plain(it.material_name)
+            while c.stringWidth(name, _FONT, 8 * k) > cols[1] - cols[0] - 4 * k and len(name) > 4:
+                name = name[:-2]
+            c.drawString(cols[0], y, name)
+            c.setFont(_FONT, 7.5 * k)
+            c.drawString(cols[1], y, _plain(it.lot_no or "—"))
+            c.setFont(_BOLD, 8 * k)
+            c.drawRightString(cols[2], y, f"{it.actual:,.2f}".rstrip("0").rstrip(".") + f" {it.unit}")
+        y -= 7 * k
+        c.setStrokeColor(LINE)
+        c.line(m, y, w - m, y)
+        y -= 12 * k
+        c.setFont(_BOLD, 10 * k)
+        net = f"Net {p.net_kg:,.1f} kg" if p.net_kg is not None else "Net —"
+        gross = f"   Gross {p.gross_kg:,.1f} kg" if p.gross_kg is not None else ""
+        c.drawString(m, y, net + gross)
+        c.setFont(_FONT, 6.5 * k)
+        c.setFillColor(MUTED)
+        c.drawString(m, m + 9 * k, _plain("Scan the code to open this bag's record and lot traceability."))
+        c.drawString(m, m, f"Printed {_generated()}")
+        c.showPage()
+    c.save()
+    return buf.getvalue()

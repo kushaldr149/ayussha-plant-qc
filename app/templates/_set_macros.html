@@ -1,0 +1,6 @@
+{% macro set_field(f, name, value) %}
+<label class="f"><span>{{ f.label }}{% if not f.required %} (optional){% endif %}</span>
+  {% if f.kind in ("select", "frequency") %}<select name="{{ name }}" id="f_{{ name }}"><option value="">— Select —</option>{% for c in f.choices %}<option {% if value == c %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+  {% else %}<input name="{{ name }}" id="f_{{ name }}" inputmode="decimal" value="{{ value or '' }}">{% endif %}
+  {% if f.hint %}<span class="hint">{{ f.hint }}</span>{% endif %}</label>
+{% endmacro %}

@@ -33,3 +33,8 @@
   <span class="muted small" data-note></span>
 </form>
 {%- endmacro %}
+
+{% macro pack_chip(status) -%}
+{%- set cls = {"Packed": "info", "Loaded": "hold", "Used at site": "pass", "Returned": "hold", "Rejected": "fail"} -%}
+<span class="chip {{ cls.get(status, 'info') }}">{{ status }}</span>
+{%- endmacro %}

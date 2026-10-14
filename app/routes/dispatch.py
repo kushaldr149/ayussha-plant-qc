@@ -35,7 +35,9 @@ def _order_ctx(db: Session) -> dict:
                            .order_by(Customer.name)).all()
     grades = db.scalars(select(ConcreteGrade).where(ConcreteGrade.active.is_(True)).order_by(ConcreteGrade.name)).all()
     sites = {c.id: [{"id": s.id, "name": s.name} for s in c.sites if s.active] for c in customers}
-    return {"customers": customers, "grades": grades, "sites_json": sites, "statuses": ORDER_STATUSES}
+    from ..models import Recipe
+    recipes = db.scalars(select(Recipe).where(Recipe.active.is_(True)).order_by(Recipe.name)).all()
+    return {"customers": customers, "grades": grades, "sites_json": sites, "statuses": ORDER_STATUSES, "recipes": recipes}
 
 
 @router.get("/orders")
@@ -148,7 +150,10 @@ def _dispatch_ctx(db: Session) -> dict:
     payload = [{"id": s["record"].id, "label": f"{s['record'].record_no} · {s['record'].product_line} · "
                 f"{s['record'].prod_date:%d %b %Y}", "line": s["record"].product_line, "available": s["available"],
                 "flagged": s["flagged"]} for s in stock]
-    return {"orders": orders, "trucks": [v for v in vehicles if v.vehicle_type != "Mixer on wheels"],
+    from ..models import Pack
+    packs = db.scalars(select(Pack).where(Pack.status == "Packed", Pack.order_id.in_([o.id for o in orders]))
+                       .options(selectinload(Pack.items)).order_by(Pack.order_id, Pack.kind, Pack.pack_no)).all()
+    return {"packs": packs, "orders": orders, "trucks": [v for v in vehicles if v.vehicle_type != "Mixer on wheels"],
             "mixers": [v for v in vehicles if v.vehicle_type == "Mixer on wheels"], "stock_json": payload}
 
 
@@ -168,6 +173,7 @@ async def dispatch_create(request: Request, db: Session = Depends(get_db), user:
     form = {k: raw.get(k, "") for k in ("dispatch_date", "order_id", "truck_id", "mixer_id", "driver_name",
                                          "driver_phone", "planned_m3", "remarks", "departed_at")}
     form["items"] = indexed_rows(raw, "i", ["production_id", "bags"])
+    form["pack_ids"] = raw.getlist("pack_ids")
     try:
         d = ops.save_dispatch(db, user, form)
     except ValidationError as e:
@@ -186,13 +192,21 @@ def _dispatch(db: Session, did: int) -> Dispatch:
     return d
 
 
+def _pack_ctx(db: Session, d: Dispatch) -> dict:
+    from ..models import Pack, SiteMix
+    packs = db.scalars(select(Pack).where(Pack.dispatch_id == d.id).options(selectinload(Pack.items))
+                       .order_by(Pack.kind, Pack.pack_no)).all()
+    mixes = db.scalars(select(SiteMix).where(SiteMix.dispatch_id == d.id).order_by(SiteMix.mix_date)).all()
+    return {"packs": packs, "mixes": mixes}
+
+
 @router.get("/dispatch/{did}")
 def dispatch_detail(did: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("view"))):
     d = _dispatch(db, did)
     samples = db.scalars(select(CubeSample).where(CubeSample.dispatch_id == d.id)).all()
     ncrs = db.scalars(select(NCR).where(NCR.dispatch_id == d.id)).all()
     return render(request, db, user, "dispatch_detail.html", d=d, samples=samples, ncrs=ncrs,
-                  statuses=DELIVERY_STATUSES, form={})
+                  statuses=DELIVERY_STATUSES, form={}, **_pack_ctx(db, d))
 
 
 @router.post("/dispatch/{did}/delivery")
@@ -205,7 +219,7 @@ async def dispatch_delivery(did: int, request: Request, db: Session = Depends(ge
     except ValidationError as e:
         samples = db.scalars(select(CubeSample).where(CubeSample.dispatch_id == d.id)).all()
         ncrs = db.scalars(select(NCR).where(NCR.dispatch_id == d.id)).all()
-        return render(request, db, user, "dispatch_detail.html", status_code=400, d=d, samples=samples, ncrs=ncrs,
+        return render(request, db, user, "dispatch_detail.html", status_code=400, d=d, samples=samples, ncrs=ncrs, **_pack_ctx(db, d),
                       statuses=DELIVERY_STATUSES, form=form, errors=e.messages)
     flash(request, f"Dispatch {d.dispatch_no} updated.")
     return redirect(f"/dispatch/{d.id}")

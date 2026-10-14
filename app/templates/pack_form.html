@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Pack a bag{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/process">Plant process</a></p><h1>Pack a bag or barrel</h1>
+<p class="muted">Bags are packed for an order. Choose the order and what is being packed; the quantities of its mix design are filled in. Pick the lot for each line and enter the weight actually packed. Lots that are not accepted, quantities outside the batching tolerance (Setup → Plant settings) and missing mix-design materials need a remark.</p></div></div>
+
+<form class="panel stack" method="get" action="/packs/new" style="max-width:900px">
+  <div class="fgrid">
+    <label class="f wide"><span>Order</span><select name="order_id" id="pk_order" required><option value="">Select order</option>{% for o in orders %}<option value="{{ o.id }}" {% if v.get('order_id')|string == o.id|string %}selected{% endif %}>{{ o.order_no }} · {{ o.customer.name }}{% if o.recipe %} · mix {{ o.recipe.name }}{% endif %}</option>{% endfor %}</select></label>
+    <label class="f"><span>What is packed</span><select name="kind" id="pk_kind" required><option value="">Select</option>{% for k in kinds %}<option {% if v.get('kind') == k %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+  </div>
+  <div class="actions"><button class="btn" type="submit">Show lots and mix quantities</button></div>
+</form>
+
+{% if order and kind %}
+<form class="panel stack" method="post" action="/packs/new">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <input type="hidden" name="order_id" value="{{ order.id }}"><input type="hidden" name="kind" value="{{ kind }}">
+  <p style="margin:0"><strong>{{ kind }}</strong> for order <span class="mono">{{ order.order_no }}</span> · {{ order.customer.name }}{% if order.grade %} · {{ order.grade.name }}{% endif %}<br>
+    <span class="muted small">{% if order.recipe %}Mix design: {{ order.recipe.name }}.{% if not planned %} It has no {{ kind|lower }} materials.{% endif %}{% else %}No mix design is set on this order, so quantities are not checked. Set it on the order page.{% endif %}</span></p>
+  {% if planned %}
+  <div class="tablewrap"><table class="data"><thead><tr><th>Mix design, per bag</th><th class="num">Planned</th></tr></thead><tbody>
+    {% for m, q, u in planned %}<tr><td>{{ m.name }}</td><td class="num mono">{{ q|num }} {{ u }}</td></tr>{% endfor %}</tbody></table></div>
+  {% endif %}
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Lot</th><th class="num">Quantity packed</th><th>Unit</th></tr></thead>
+    <tbody>
+    {% for n in range(lines) %}{% set it = items[n] if n < items|length else {} %}
+      <tr><td><select name="it-{{ n }}-lot" aria-label="Lot line {{ n + 1 }}"><option value="">—</option>
+          {% for lt in lots %}<option value="{{ lt.key }}" {% if it.get('lot') == lt.key %}selected{% endif %}>{{ lt.label }}</option>{% endfor %}</select>
+          {% if it.get('material_id') %}{% for m, q, u in planned if m.id == it.get('material_id') %}<div class="muted small">For {{ m.name }}</div>{% endfor %}{% endif %}</td>
+        <td class="num"><input name="it-{{ n }}-actual" inputmode="decimal" class="mono" style="max-width:130px" aria-label="Quantity line {{ n + 1 }}" value="{{ it.get('actual', '') }}"></td>
+        <td><select name="it-{{ n }}-unit" aria-label="Unit line {{ n + 1 }}">{% for u in UNITS if u in ["kg", "t", "L", "mL"] %}<option {% if it.get('unit', 'kg') == u %}selected{% endif %}>{{ u }}</option>{% endfor %}</select></td></tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% if not lots %}<p class="note-warn">No lots of {{ kind|lower }} materials yet. Record inward tests in Material QC{% if kind == "Aggregate jumbo bag" or kind == "Cementitious jumbo bag" %}, or coating/grinding batches{% endif %} first.</p>{% endif %}
+  <div class="fgrid">
+    <label class="f"><span>Packing date</span><input type="date" name="pack_date" id="pk_date" required value="{{ v.get('pack_date') or today }}"></label>
+    <label class="f"><span>Number of identical bags</span><input name="copies" id="pk_copies" inputmode="numeric" class="mono" value="{{ v.get('copies', '1') }}"><span class="hint">Each gets its own number and label. 1–50.</span></label>
+    <label class="f"><span>Gross mass, kg (optional)</span><input name="gross_kg" id="pk_gross" inputmode="decimal" class="mono" value="{{ v.get('gross_kg', '') }}"><span class="hint">Bag plus contents, as weighed.</span></label>
+  </div>
+  <label class="f"><span>Remarks</span><textarea name="remarks" id="pk_rem" rows="2">{{ v.get('remarks', '') }}</textarea></label>
+  <div class="actions"><a class="btn" href="/process">Cancel</a><button class="btn primary" type="submit">Save</button></div>
+</form>
+{% endif %}
+{% endblock %}

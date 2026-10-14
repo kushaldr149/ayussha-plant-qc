@@ -145,7 +145,11 @@ def delivery_note(did: int, db: Session = Depends(get_db), user: User = Depends(
         selectinload(Dispatch.items).selectinload(DispatchItem.production))).first()
     if not d:
         raise HTTPException(404, "This dispatch does not exist.")
-    return _file(reports.delivery_note_pdf(d, services.get_settings(db)), "application/pdf", f"{d.dispatch_no}.pdf", inline=True)
+    from ..models import Pack
+    packs = db.scalars(select(Pack).where(Pack.dispatch_id == d.id).options(selectinload(Pack.items))
+                       .order_by(Pack.kind, Pack.pack_no)).all()
+    return _file(reports.delivery_note_pdf(d, services.get_settings(db), packs), "application/pdf", f"{d.dispatch_no}.pdf",
+                 inline=True)
 
 
 @router.get("/strength/{sid}/report.pdf")

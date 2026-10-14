@@ -11,6 +11,9 @@
   <label class="f"><span>Site</span><select name="site_id" id="o_site" data-current="{{ site }}"><option value="">Select site</option></select></label>
   {% set gr = v.get('grade_id', (o.grade_id|string) if o and o.grade_id else '') %}
   <label class="f"><span>Concrete grade</span><select name="grade_id" id="o_grade"><option value="">Not specified</option>{% for g in grades %}<option value="{{ g.id }}" {% if gr == g.id|string %}selected{% endif %}>{{ g.name }}</option>{% endfor %}</select></label>
+  {% set rc = v.get('recipe_id', (o.recipe_id|string) if o and o.recipe_id else '') %}
+  <label class="f"><span>Mix design for the bags</span><select name="recipe_id" id="o_recipe"><option value="">Not set</option>{% for r in recipes %}<option value="{{ r.id }}" {% if rc == r.id|string %}selected{% endif %}>{{ r.name }}</option>{% endfor %}</select>
+    <span class="hint">A recipe in Setup giving the kg of each material per bag set. Bags packed for this order are checked against it.</span></label>
   <label class="f"><span>Quantity ordered (m³)</span><input name="quantity_m3" id="o_qty" inputmode="decimal" class="mono" value="{{ v.get('quantity_m3', o.quantity_m3 if o and o.quantity_m3 is not none else '') }}"></label>
   <label class="f"><span>Required by</span><input type="date" name="required_date" id="o_req" value="{{ v.get('required_date', o.required_date.isoformat() if o and o.required_date else '') }}"></label>
   {% set st = v.get('status', o.status if o else 'Open') %}

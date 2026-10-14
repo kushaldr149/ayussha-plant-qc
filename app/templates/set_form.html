@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_set_macros.html" import set_field %}
+{% block title %}Test set · {{ m.name }}{% endblock %}
+{% block content %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/setup/materials/{{ m.id }}">{{ m.name }}</a> · {{ m.category }}</p>
+<h1>Apply standard test set</h1>
+<p class="muted">Adds the requirements of the selected Indian Standard with the test method. Parameters with the same name are updated; others are added. Past tests keep the limits they were recorded with.</p></div></div>
+
+<form class="panel stack" method="get" action="/setup/materials/{{ m.id }}/set" style="max-width:900px">
+  {% if chosen %}<input type="hidden" name="preview" value="1">{% endif %}
+  <div class="fgrid">
+    <label class="f"><span>Standard</span><select name="set" id="f_set">
+      {% if options|length > 1 %}<option value="">— Select —</option>{% endif %}
+      {% for o in options %}<option value="{{ o.key }}" {% if chosen and chosen.key == o.key %}selected{% endif %}>{{ o.label }}</option>{% endfor %}</select></label>
+    {% if chosen %}{% for f in chosen.fields %}{{ set_field(f, f.name, q.get(f.name)) }}{% endfor %}{% endif %}
+  </div>
+  <div class="actions"><a class="btn" href="/setup/materials/{{ m.id }}">Cancel</a><button class="btn primary" type="submit">{{ "Preview test set" if chosen else "Next" }}</button></div>
+</form>
+
+{% if preview %}
+<form method="post" action="/setup/materials/{{ m.id }}/set" class="stack" style="display:grid;gap:14px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <input type="hidden" name="set" value="{{ chosen.key }}">
+  {% for f in chosen.fields %}{% if q.get(f.name) %}<input type="hidden" name="{{ f.name }}" value="{{ q.get(f.name) }}">{% endif %}{% endfor %}
+  {% set show_existing = true %}{% include "_set_preview.html" %}
+  <label class="check"><input type="checkbox" name="deactivate_others" id="i_deact"> Mark this material's other parameters inactive</label>
+  <div class="actions"><button class="btn primary" type="submit">Apply {{ preview|length }} parameters to {{ m.name }}</button></div>
+</form>
+{% endif %}
+
+{% if chosen %}
+<div class="panel">
+  <h2>Sources</h2>
+  {% if chosen.key in ("opc43", "opc53", "ppc", "psc") %}{% include "_cement_note.html" %}{% else %}<p class="small" style="margin:6px 0 0">Limits were read from the BIS text and the amendments listed. Check them against your copy of the standard. Every value can be changed afterwards in Setup.</p>{% endif %}
+  <ul class="small" style="margin:8px 0 0;padding-left:18px">{% for label, url in chosen.sources %}<li><a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a></li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% endblock %}

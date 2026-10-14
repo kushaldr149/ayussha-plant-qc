@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import dec_chip, pack_chip, prod_chip %}
+{% block title %}Plant process{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <div><h1>Plant process</h1><p class="muted">Coating of coarse aggregate, grinding of cementitious materials, packing of jumbo bags, fibre bags and admixture barrels per order, and the mixing record at site. Every bag traces back to the lots in it.</p></div>
+  <div class="row">
+    <a class="btn" href="/packs/scan">Scan / find a bag</a>
+    {% if can("process.write") %}<a class="btn" href="/process/coating/new">New coating batch</a><a class="btn" href="/process/grinding/new">New grinding batch</a><a class="btn primary" href="/packs/new">Pack a bag</a>{% endif %}
+  </div>
+</div>
+<div class="tiles">
+  {% for s in PACK_STATUSES %}<a class="tile {% if s == 'Rejected' and counts.get(s) %}bad{% endif %}" href="/packs?status={{ s|urlencode }}"><span class="k">Bags {{ s|lower }}</span><span class="v">{{ counts.get(s, 0) }}</span></a>{% endfor %}
+  <a class="tile {% if on_hold %}warn{% endif %}" href="/process/batches?decision=On+hold"><span class="k">Batches on hold</span><span class="v">{{ on_hold }}</span></a>
+</div>
+<div class="panel">
+  <div class="panel-head"><h2>Coating and grinding batches</h2><a class="small" href="/process/batches">All batches</a></div>
+  {% include "_batch_rows.html" %}
+</div>
+<div class="panel">
+  <div class="panel-head"><h2>Bags and barrels</h2><a class="small" href="/packs">All bags</a></div>
+  {% set rows = packs %}{% include "_pack_rows.html" %}
+</div>
+<div class="panel">
+  <div class="panel-head"><h2>Site mixing records</h2><span class="muted small">Recorded from the dispatch page</span></div>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Record</th><th>Date</th><th>Dispatch</th><th>Element</th><th class="num">Volume m³</th><th class="num">Slump mm</th></tr></thead>
+    <tbody>{% for m in mixes %}
+      <tr><td class="mono"><a class="rowlink" href="/site-mix/{{ m.id }}">{{ m.mix_no }}</a></td><td>{{ m.mix_date|d }}</td>
+        <td class="mono"><a href="/dispatch/{{ m.dispatch_id }}">{{ m.dispatch.dispatch_no }}</a></td><td>{{ m.element or "—" }}</td>
+        <td class="num mono">{{ m.volume_m3|num if m.volume_m3 is not none else "—" }}</td><td class="num mono">{{ m.slump_mm|num if m.slump_mm is not none else "—" }}</td></tr>
+    {% else %}<tr><td colspan="6" class="empty">No site mixing recorded yet.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% endblock %}

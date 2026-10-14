@@ -1,0 +1,10 @@
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Bag / barrel</th><th>Packed</th><th>Type</th><th>Order</th><th>Contents</th><th class="num">Net kg</th><th>Batching</th><th>Status</th></tr></thead>
+  <tbody>{% for p in rows %}
+    <tr><td class="mono nowrap"><a class="rowlink" href="/packs/{{ p.id }}">{{ p.pack_no }}</a></td><td class="nowrap">{{ p.pack_date|d }}</td>
+      <td>{{ p.kind }}</td><td class="small"><span class="mono">{{ p.order.order_no }}</span><div class="muted">{{ p.order.customer.name }}</div></td>
+      <td class="small">{% for it in p.items %}{{ it.material_name }} {{ it.actual|num }} {{ it.unit }}{% if not loop.last %} · {% endif %}{% endfor %}</td>
+      <td class="num mono">{{ p.net_kg|num if p.net_kg is not none else "—" }}</td>
+      <td>{{ prod_chip(p.batching_status) }}{% if p.lot_issue %}<div style="margin-top:4px"><span class="chip hold">Lot not accepted</span></div>{% endif %}</td>
+      <td>{{ pack_chip(p.status) }}</td></tr>
+  {% else %}<tr><td colspan="8" class="empty">No bags yet.</td></tr>{% endfor %}</tbody></table></div>

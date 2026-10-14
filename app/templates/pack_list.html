@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pack_chip, prod_chip %}
+{% block title %}Bags and barrels{% endblock %}
+{% block content %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/process">Plant process</a></p><h1>Bags and barrels</h1></div>
+  <div class="row">
+    {% if f.order %}<a class="btn" href="/orders/{{ f.order }}/labels.pdf" target="_blank" rel="noopener">Print labels of packed bags (A6)</a>{% endif %}
+    <a class="btn" href="/packs/scan">Scan / find a bag</a>{% if can("process.write") %}<a class="btn primary" href="/packs/new{% if f.order %}?order_id={{ f.order }}{% endif %}">Pack a bag</a>{% endif %}</div></div>
+<form class="filters" method="get" action="/packs" data-autosubmit>
+  <label>Order<select name="order" id="f-order"><option value="">All</option>{% for o in orders %}<option value="{{ o.id }}" {% if f.order == o.id|string %}selected{% endif %}>{{ o.order_no }}</option>{% endfor %}</select></label>
+  <label>Type<select name="kind" id="f-kind"><option value="">All</option>{% for k in kinds %}<option {% if f.kind == k %}selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+  <label>Status<select name="status" id="f-status"><option value="">All</option>{% for s in statuses %}<option {% if f.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  <label>Search<input type="search" name="q" id="f-q" value="{{ f.get('q', '') }}" placeholder="Bag no. or lot no."></label>
+  <button class="btn" type="submit">Apply</button>{% if f %}<a class="btn ghost" href="/packs">Clear</a>{% endif %}
+</form>
+{% include "_pack_rows.html" %}
+{% endblock %}

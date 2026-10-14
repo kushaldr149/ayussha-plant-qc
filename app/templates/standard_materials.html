@@ -1,24 +1,27 @@
 {% extends "base.html" %}
+{% from "_set_macros.html" import set_field %}
 {% block title %}Add standard materials{% endblock %}
 {% block content %}
 {% set fresh = not form %}
 <div class="toolbar"><div><p class="muted" style="margin:0"><a href="/setup">Setup</a></p>
 <h1>Add standard materials</h1>
-<p class="muted">Creates each ticked material with its IS test set: IS 383:2016 / IS 2386 for aggregates, IS 269, IS 1489 (Part 1) or IS 455 for cement. Choose the options for each one; nothing is pre-selected. If a material with the same name already exists, the test set is applied to it instead.</p></div></div>
+<p class="muted">Creates each ticked material, with its Indian Standard test set where one exists. Choose the options for each one; nothing is pre-selected. If a material with the same name already exists, the test set is applied to it instead. Untick anything you do not use.</p></div></div>
 
 <form method="post" action="/setup/standard-materials" class="stack" style="display:grid;gap:14px">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {% for gname, presets in groups.items() %}
+  <h2 style="margin:6px 0 -4px">{{ gname }}</h2>
   {% for pr in presets %}{% set k = pr.key %}
   {% set nm = form.get(k ~ "_name") or pr.name %}
   <div class="panel">
     <div class="panel-head" style="margin-bottom:10px">
       <label class="check"><input type="checkbox" name="{{ k }}_on" id="p_{{ k }}" {% if fresh or form.get(k ~ '_on') == 'on' %}checked{% endif %}>
         <strong>{{ pr.category }}</strong></label>
-      {% if nm.lower() in existing %}<span class="chip hold">Exists · set will be applied to it</span>{% endif %}
+      {% if nm.lower() in existing %}<span class="chip hold">Exists{% if pr.set %} · set will be applied to it{% endif %}</span>{% endif %}
     </div>
     <div class="fgrid">
       <label class="f"><span>Material name</span><input name="{{ k }}_name" id="n_{{ k }}" value="{{ nm }}" maxlength="160"></label>
-      {% if pr.category == "Coarse aggregate" %}
+      {% if pr.set == "coarse" %}
         <label class="f"><span>Type of coarse aggregate</span><select name="{{ k }}_source" id="s_{{ k }}"><option value="">— Select —</option>
           {% for s in coarse_sources %}<option {% if form.get(k ~ '_source') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
         <label class="f"><span>Grading (IS 383 Table 7)</span><select name="{{ k }}_grading" id="g_{{ k }}"><option value="">— Select —</option>
@@ -28,7 +31,7 @@
           {% for key, label in uses.items() %}<option value="{{ key }}" {% if form.get(k ~ '_use') == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
         <label class="check"><input type="checkbox" name="{{ k }}_m65" {% if form.get(k ~ '_m65') == 'on' %}checked{% endif %}> Concrete M65 and above</label>
         <label class="check"><input type="checkbox" name="{{ k }}_frost" {% if form.get(k ~ '_frost') == 'on' %}checked{% endif %}> Exposed to frost</label>
-      {% elif pr.category == "Fine aggregate" %}
+      {% elif pr.set == "fine" %}
         <label class="f"><span>Type of fine aggregate (IS 383 cl. 3.1)</span><select name="{{ k }}_source" id="s_{{ k }}"><option value="">— Select —</option>
           {% for s in pr.sources %}<option {% if form.get(k ~ '_source') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
           <span class="hint">IS 383:2016 cl. 3.1.2.1: crushed stone sand is produced by crushing hard stone. Cl. 3.1.4: "manufactured sand" is made from other than natural sources (for example slag) by thermal or other processes.</span></label>
@@ -36,28 +39,28 @@
           {% for z in zones %}<option {% if form.get(k ~ '_zone') == z %}selected{% endif %}>{{ z }}</option>{% endfor %}</select>
           <span class="hint">Every test also shows which zones the grading actually falls in.</span></label>
         <label class="check"><input type="checkbox" name="{{ k }}_frost" {% if form.get(k ~ '_frost') == 'on' %}checked{% endif %}> Exposed to frost</label>
+      {% elif pr.set %}
+        {% if pr.optional %}<label class="check"><input type="checkbox" name="{{ k }}_apply" id="a_{{ k }}" {% if form.get(k ~ '_apply') == 'on' %}checked{% endif %}> Apply the {{ SETS[pr.set].label }} test set</label>{% endif %}
+        {% for f in preset_fields(pr) %}{{ set_field(f, k ~ "_" ~ f.name, form.get(k ~ "_" ~ f.name)) }}{% endfor %}
+        <p class="small muted" style="margin:0;align-self:center">{{ SETS[pr.set].label }}{% if pr.fixed %} · {{ pr.fixed.values()|join(", ") }}{% endif %}</p>
       {% else %}
-        {% if pr.cement in ("PPC", "PSC") %}
-        <label class="f"><span>Declared {{ "fly ash" if pr.cement == "PPC" else "slag" }} % (optional)</span><input name="{{ k }}_declared" inputmode="decimal" value="{{ form.get(k ~ '_declared', '') }}">
-          <span class="hint">{% if pr.cement == "PPC" %}Fills the insoluble residue limits (IS 1489 Part 1 Table 1). Allowed 15–35 %.{% else %}Allowed 25–70 % (IS 455 cl. 5).{% endif %}</span></label>
-        {% endif %}
-        <p class="small muted" style="margin:0;align-self:center">{{ {"OPC 43": "IS 269:2015, 43 grade", "OPC 53": "IS 269:2015, 53 grade", "PPC": "IS 1489 (Part 1):2015, fly ash based", "PSC": "IS 455:2015"}[pr.cement] }}</p>
+        <p class="small muted" style="margin:0;align-self:center">{{ pr.note or "Material only. Add its tests in Setup when your specification for it is ready." }}</p>
       {% endif %}
     </div>
   </div>
-  {% endfor %}
+  {% endfor %}{% endfor %}
 
   <div class="panel">
-    <h2 style="margin-bottom:10px">Cement test frequency</h2>
+    <h2 style="margin-bottom:10px">Test frequency for cement, SCM, microsilica and fibre sets</h2>
     <div class="fgrid">
-      <label class="f"><span>How often your lab runs the cement physical tests</span><select name="phys_freq" id="i_pf"><option value="">— Select —</option>
+      <label class="f"><span>How often your lab runs the physical tests</span><select name="phys_freq" id="i_pf"><option value="">— Select —</option>
         {% for f in frequencies %}<option {% if form.get('phys_freq') == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select>
-        <span class="hint">Not set by the standards; this is your plant's choice.</span></label>
-      <label class="f"><span>How often your lab runs the cement chemical tests</span><select name="chem_freq" id="i_cf"><option value="">— Select —</option>
+        <span class="hint">Not set by the standards; this is your plant's choice. Used for fibre tests too.</span></label>
+      <label class="f"><span>How often your lab runs the chemical tests</span><select name="chem_freq" id="i_cf"><option value="">— Select —</option>
         {% for f in frequencies %}<option {% if form.get('chem_freq') == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select>
         <span class="hint">Tests not set to "Every lot" can be left empty when they are not due.</span></label>
     </div>
-    <p class="small muted" style="margin:10px 0 0">Aggregate test frequencies come from the BIS product manual for IS 383, which the manual calls recommendatory. All frequencies and limits can be changed afterwards per parameter.</p>
+    <p class="small muted" style="margin:10px 0 0">Aggregate test frequencies come from the BIS product manual for IS 383, which the manual calls recommendatory. All frequencies and limits can be changed afterwards per parameter. Chemical admixtures are product-specific: add each one (for example a Fosroc or Sika product) with "Add material" in the Admixture category, then apply the IS 9103 set with the manufacturer's stated values.</p>
   </div>
 
   <div class="alert">Aggregate limits are from IS 383:2016 (Third Revision) base text; soft fragments, shale and mica have no limit filled in and need yours. {% include "_cement_note.html" %}</div>

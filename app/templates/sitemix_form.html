@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Site mixing · {{ d.dispatch_no }}{% endblock %}
+{% block content %}
+{% set v = form if form else {} %}
+{% set chosen = v.get('pack_ids') or [] %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/dispatch/{{ d.id }}">{{ d.dispatch_no }}</a> · {{ d.order.customer.name }}{% if d.order.site %} · {{ d.order.site.name }}{% endif %}</p><h1>Record site mixing</h1>
+<p class="muted">What the mixer on wheels mixed at site: the bags emptied into the mixer, the admixture dosed from each barrel, the water added and the fresh concrete checks.</p></div></div>
+<form class="panel stack" method="post" action="/site-mix/new">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="dispatch_id" value="{{ d.id }}">
+  <div>
+    <h2 style="margin-bottom:8px">Bags mixed</h2>
+    <div class="tablewrap"><table class="data"><thead><tr><th></th><th>Bag</th><th>Contents</th><th class="num">Net kg</th><th>Status</th></tr></thead><tbody>
+      {% for p in bags %}<tr><td><input type="checkbox" name="pack_ids" value="{{ p.id }}" id="mb_{{ p.id }}" {% if p.id|string in chosen %}checked{% endif %} {% if p.status != "Loaded" %}disabled{% endif %} aria-label="Mixed {{ p.pack_no }}"></td>
+        <td><label for="mb_{{ p.id }}" class="mono">{{ p.pack_no }}</label><div class="muted small">{{ p.kind }}</div></td>
+        <td class="small">{% for it in p.items %}{{ it.material_name }} {{ it.actual|num }} {{ it.unit }}{% if not loop.last %} · {% endif %}{% endfor %}</td>
+        <td class="num mono">{{ p.net_kg|num if p.net_kg is not none else "—" }}</td><td class="small">{{ p.status }}</td></tr>
+      {% else %}<tr><td colspan="5" class="empty">No bags were loaded on this dispatch.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+  <div>
+    <h2 style="margin-bottom:8px">Admixture dosed</h2>
+    <div class="tablewrap"><table class="data"><thead><tr><th>Barrel</th><th class="num">Dose</th><th>Unit</th></tr></thead><tbody>
+      {% for n in range(3) %}{% set a = adm[n] if n < adm|length else {} %}
+      <tr><td><select name="ad-{{ n }}-pack_id" aria-label="Barrel line {{ n + 1 }}"><option value="">—</option>{% for b in barrels %}<option value="{{ b.id }}" {% if a.get('pack_id') == b.id|string %}selected{% endif %}>{{ b.pack_no }} · {% for it in b.items %}{{ it.material_name }} lot {{ it.lot_no or "—" }}{% endfor %}</option>{% endfor %}</select></td>
+        <td class="num"><input name="ad-{{ n }}-dose" inputmode="decimal" class="mono" style="max-width:120px" aria-label="Dose line {{ n + 1 }}" value="{{ a.get('dose', '') }}"></td>
+        <td><select name="ad-{{ n }}-unit" aria-label="Unit line {{ n + 1 }}">{% for u in ["kg", "L"] %}<option {% if a.get('unit', 'kg') == u %}selected{% endif %}>{{ u }}</option>{% endfor %}</select></td></tr>
+      {% endfor %}</tbody></table></div>
+    {% if not barrels %}<p class="small muted" style="margin:6px 0 0">No admixture barrel was loaded on this dispatch.</p>{% endif %}
+  </div>
+  <div class="fgrid">
+    <label class="f"><span>Mixing date</span><input type="date" name="mix_date" id="sm_date" required value="{{ v.get('mix_date') or today }}"></label>
+    <label class="f"><span>Mixing started</span><input type="datetime-local" name="started_at" id="sm_start" value="{{ v.get('started_at', '') }}"></label>
+    <label class="f"><span>Pouring finished</span><input type="datetime-local" name="finished_at" id="sm_end" value="{{ v.get('finished_at', '') }}"></label>
+    <label class="f"><span>Element / location poured</span><input name="element" id="sm_el" value="{{ v.get('element', '') }}"></label>
+    <label class="f"><span>Volume mixed (m³)</span><input name="volume_m3" id="sm_vol" inputmode="decimal" class="mono" value="{{ v.get('volume_m3', '') }}"></label>
+    <label class="f"><span>Water added (litres)</span><input name="water_l" id="sm_w" inputmode="decimal" class="mono" value="{{ v.get('water_l', '') }}"></label>
+    <label class="f"><span>Mixing time (min)</span><input name="mixing_time_min" id="sm_mt" inputmode="decimal" class="mono" value="{{ v.get('mixing_time_min', '') }}"></label>
+    <label class="f"><span>Slump (mm)</span><input name="slump_mm" id="sm_sl" inputmode="decimal" class="mono" value="{{ v.get('slump_mm', '') }}"></label>
+    <label class="f"><span>Flow (mm)</span><input name="flow_mm" id="sm_fl" inputmode="decimal" class="mono" value="{{ v.get('flow_mm', '') }}"></label>
+    <label class="f"><span>Concrete temperature (°C)</span><input name="concrete_temp_c" id="sm_ct" inputmode="decimal" class="mono" value="{{ v.get('concrete_temp_c', '') }}"></label>
+    <label class="f"><span>Ambient temperature (°C)</span><input name="ambient_temp_c" id="sm_at" inputmode="decimal" class="mono" value="{{ v.get('ambient_temp_c', '') }}"></label>
+    <label class="f"><span>Site supervisor</span><input name="supervisor" id="sm_sup" value="{{ v.get('supervisor', '') }}"></label>
+    <label class="f"><span>Cubes cast (strength sample)</span><select name="cube_sample_id" id="sm_cube"><option value="">None / not yet recorded</option>{% for s in samples %}<option value="{{ s.id }}" {% if v.get('cube_sample_id') == s.id|string %}selected{% endif %}>{{ s.sample_no }}</option>{% endfor %}</select>
+      <span class="hint">Record cubes from the dispatch page first if they were cast.</span></label>
+  </div>
+  <label class="f"><span>Remarks</span><textarea name="remarks" id="sm_rem" rows="2">{{ v.get('remarks', '') }}</textarea></label>
+  <div class="actions"><a class="btn" href="/dispatch/{{ d.id }}">Cancel</a><button class="btn primary" type="submit">Save site mixing record</button></div>
+</form>
+{% endblock %}

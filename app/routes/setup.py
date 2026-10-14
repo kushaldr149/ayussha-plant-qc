@@ -120,8 +120,12 @@ def material_delete(mid: int, request: Request, db: Session = Depends(get_db), u
            (db.scalar(select(func.count(ProductionComponent.id)).where(ProductionComponent.material_id == mid)) or 0) + \
            (db.scalar(select(func.count(RecipeComponent.id)).where(RecipeComponent.material_id == mid)) or 0) + \
            (db.scalar(select(func.count(StockAdjustment.id)).where(StockAdjustment.material_id == mid)) or 0)
+    from ..models import PackItem, ProcessBatch, ProcessInput
+    used += (db.scalar(select(func.count(ProcessInput.id)).where(ProcessInput.material_id == mid)) or 0) + \
+            (db.scalar(select(func.count(ProcessBatch.id)).where(ProcessBatch.output_material_id == mid)) or 0) + \
+            (db.scalar(select(func.count(PackItem.id)).where(PackItem.material_id == mid)) or 0)
     if used:
-        flash(request, "This material is used in tests, production records or recipes. Mark it inactive instead of deleting it.", "error")
+        flash(request, "This material is used in tests, production records, recipes, process batches or bags. Mark it inactive instead of deleting it.", "error")
         return redirect(f"/setup/materials/{mid}")
     for p in list(m.parameters):
         db.delete(p)
@@ -395,93 +399,112 @@ async def is383_apply(mid: int, request: Request, db: Session = Depends(get_db),
     return redirect(f"/setup/materials/{mid}")
 
 
-# ---------------------------------------------------------------- cement test sets
+# ---------------------------------------------------------------- standard test sets (cement, SCM, admixture, fibre)
 
-from .. import cement_library as cem  # noqa: E402
+from .. import standard_sets as ts  # noqa: E402
 
-
-def _cement_opts(q) -> tuple[str, str, str, float | None]:
-    kind = str(q.get("kind", ""))
-    pf, cf = str(q.get("phys_freq", "")), str(q.get("chem_freq", ""))
-    if kind not in cem.TYPES:
-        raise ValueError("Select the cement type.")
-    if pf not in lib.FREQUENCIES or cf not in lib.FREQUENCIES:
-        raise ValueError("Select how often your lab runs the physical tests and the chemical tests.")
-    raw = str(q.get("declared", "")).strip()
-    try:
-        declared = float(raw) if raw else None
-    except ValueError:
-        raise ValueError("Declared fly ash or slag must be a number.") from None
-    return kind, pf, cf, declared
-
-
-def _cement_set(q) -> list:
-    kind, pf, cf, declared = _cement_opts(q)
-    return cem.cement_set(kind, pf, cf, declared if kind in ("PPC", "PSC") else None)
-
-
-def _cement_ctx() -> dict:
-    return {"types": cem.TYPES, "frequencies": lib.FREQUENCIES, "sources_list": cem.SOURCES}
+SET_CATEGORIES = sorted({c for t in ts.SETS.values() for c in t.categories})
 
 
 @router.get("/materials/{mid}/cement")
-def cement_page(mid: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+def cement_page_old(mid: int):
+    return redirect(f"/setup/materials/{mid}/set")
+
+
+@router.get("/materials/{mid}/set")
+def set_page(mid: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
     m = db.get(Material, mid) or _404()
-    if m.category != "Cement":
-        flash(request, "Cement test sets are for materials in the Cement category. Change the material's category first.", "warn")
+    options = ts.sets_for(m.category)
+    if not options:
+        flash(request, f"No standard test set is available for the {m.category} category.", "warn")
         return redirect(f"/setup/materials/{mid}")
     q = request.query_params
+    chosen = ts.SETS.get(str(q.get("set", ""))) if q.get("set") in {o.key for o in options} else None
+    if chosen is None and len(options) == 1:
+        chosen = options[0]
     preview, error = None, None
-    if q.get("preview"):
+    if chosen and q.get("preview"):
         try:
-            preview = _cement_set(q)
+            preview = ts.build(chosen.key, q)
         except ValueError as e:
             error = str(e)
     existing = {p.name.lower() for p in m.parameters}
-    return render(request, db, user, "cement_form.html", m=m, o=_cement_ctx(), q=q, preview=preview,
+    return render(request, db, user, "set_form.html", m=m, options=options, chosen=chosen, q=q, preview=preview,
                   existing=existing, errors=[error] if error else None)
 
 
-@router.post("/materials/{mid}/cement")
-async def cement_apply(mid: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+@router.post("/materials/{mid}/set")
+async def set_apply(mid: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
     m = db.get(Material, mid) or _404()
-    if m.category != "Cement":
-        flash(request, "Cement test sets are for materials in the Cement category.", "error")
-        return redirect(f"/setup/materials/{mid}")
     form = await request.form()
+    key = str(form.get("set", ""))
+    if key not in {o.key for o in ts.sets_for(m.category)}:
+        flash(request, "That test set is not available for this material's category.", "error")
+        return redirect(f"/setup/materials/{mid}/set")
     try:
-        items = _cement_set(form)
+        items = ts.build(key, form)
     except ValueError as e:
         flash(request, str(e), "error")
-        return redirect(f"/setup/materials/{mid}/cement")
+        return redirect(f"/setup/materials/{mid}/set?set={key}")
     added, updated, deactivated = _upsert_params(db, m, items, form.get("deactivate_others") == "on")
     db.flush()
-    audit.record(db, user, "apply_cement_set", "material", m.id, {
-        "material": m.name, "options": {k: str(form.get(k, "")) for k in ("kind", "phys_freq", "chem_freq", "declared")},
+    audit.record(db, user, "apply_test_set", "material", m.id, {
+        "material": m.name, "set": key,
+        "options": {f.name: str(form.get(f.name, "")) for f in ts.SETS[key].fields},
         "added": added, "updated": updated, "deactivated": deactivated})
     db.commit()
-    msg = f"{cem.TYPES[str(form.get('kind'))]} test set applied to {m.name}: {added} parameter(s) added, {updated} updated"
+    msg = f"{ts.SETS[key].label} applied to {m.name}: {added} parameter(s) added, {updated} updated"
     flash(request, msg + (f", {deactivated} other parameter(s) marked inactive." if deactivated else "."))
     return redirect(f"/setup/materials/{mid}")
 
 
 # ---------------------------------------------------------------- standard materials
 
+# set: an IS 383 kind ("coarse"/"fine"), a key of standard_sets.SETS, or None (material only).
+# optional: the user decides whether to apply the set. fixed: set options that the preset fixes.
 PRESETS = [
-    {"key": "ca20", "name": "20 mm down", "category": "Coarse aggregate", "gradings": ["Graded 20 mm", "Single-sized 20 mm"]},
-    {"key": "ca12", "name": "12.5 mm down", "category": "Coarse aggregate", "gradings": ["Graded 12.5 mm", "Single-sized 12.5 mm"]},
-    {"key": "msand", "name": "M-sand", "category": "Fine aggregate", "sources": ["Crushed stone sand", "Manufactured"]},
-    {"key": "opc43", "name": "OPC-43 grade", "category": "Cement", "cement": "OPC 43"},
-    {"key": "opc53", "name": "OPC-53 grade", "category": "Cement", "cement": "OPC 53"},
-    {"key": "ppc", "name": "PPC", "category": "Cement", "cement": "PPC"},
-    {"key": "psc", "name": "PSC", "category": "Cement", "cement": "PSC"},
+    {"key": "ca20", "name": "20 mm down", "category": "Coarse aggregate", "set": "coarse", "group": "Aggregates (from crushers)",
+     "gradings": ["Graded 20 mm", "Single-sized 20 mm"]},
+    {"key": "ca12", "name": "12.5 mm down", "category": "Coarse aggregate", "set": "coarse", "group": "Aggregates (from crushers)",
+     "gradings": ["Graded 12.5 mm", "Single-sized 12.5 mm"]},
+    {"key": "msand", "name": "M-sand", "category": "Fine aggregate", "set": "fine", "group": "Aggregates (from crushers)",
+     "sources": ["Crushed stone sand", "Manufactured"]},
+    {"key": "opc43", "name": "OPC-43 grade", "category": "Cement", "set": "opc43", "group": "Cementitious materials"},
+    {"key": "opc53", "name": "OPC-53 grade", "category": "Cement", "set": "opc53", "group": "Cementitious materials"},
+    {"key": "ppc", "name": "PPC", "category": "Cement", "set": "ppc", "group": "Cementitious materials"},
+    {"key": "psc", "name": "PSC", "category": "Cement", "set": "psc", "group": "Cementitious materials"},
+    {"key": "ggbs", "name": "GGBS", "category": "Supplementary cementitious material", "set": "ggbs", "group": "Cementitious materials"},
+    {"key": "flyash", "name": "Fly ash", "category": "Supplementary cementitious material", "set": "flyash", "group": "Cementitious materials"},
+    {"key": "msilica", "name": "Microsilica", "category": "Supplementary cementitious material", "set": "silicafume", "group": "Cementitious materials"},
+    {"key": "wms", "name": "White microsilica", "category": "Coating material", "set": "silicafume", "optional": True, "group": "Coating materials"},
+    {"key": "bms", "name": "Black microsilica", "category": "Coating material", "set": "silicafume", "optional": True, "group": "Coating materials"},
+    {"key": "alcc", "name": "Alccofine", "category": "Coating material", "set": None, "group": "Coating materials",
+     "note": "No Indian Standard test set was found for it; add its tests from the supplier's specification."},
+    {"key": "steelf", "name": "Micro steel fibres", "category": "Fibre", "set": None, "group": "Fibres",
+     "note": "No Indian Standard for steel fibres was found; add its tests from the supplier's specification."},
+    {"key": "ppf", "name": "Polypropylene fibres", "category": "Fibre", "set": "synfibre", "group": "Fibres",
+     "fixed": {"fibre_type": "Polypropylene"}},
+    {"key": "c20", "name": "Coated 20 mm down", "category": "Coated aggregate", "set": None, "group": "In-house products"},
+    {"key": "c12", "name": "Coated 12.5 mm down", "category": "Coated aggregate", "set": None, "group": "In-house products"},
+    {"key": "gcem", "name": "Ground cement", "category": "Ground cementitious material", "set": None, "group": "In-house products"},
+    {"key": "gggbs", "name": "Ground GGBS", "category": "Ground cementitious material", "set": None, "group": "In-house products"},
+    {"key": "gfa", "name": "Ground fly ash", "category": "Ground cementitious material", "set": None, "group": "In-house products"},
+    {"key": "gms", "name": "Ground microsilica", "category": "Ground cementitious material", "set": None, "group": "In-house products"},
 ]
+SHARED_FIELDS = {"phys_freq", "chem_freq"}
+
+
+def _preset_fields(pr: dict) -> list:
+    """Set fields the user fills per row (frequencies are shared, fixed options are not shown)."""
+    if pr["set"] not in ts.SETS:
+        return []
+    return [f for f in ts.SETS[pr["set"]].fields if f.name not in SHARED_FIELDS and f.name not in pr.get("fixed", {})]
 
 
 def _preset_items(pr: dict, form) -> list:
     k = pr["key"]
     g = lambda f: str(form.get(f"{k}_{f}", ""))  # noqa: E731
-    if pr["category"] == "Coarse aggregate":
+    if pr["set"] == "coarse":
         if g("source") not in lib.COARSE_SOURCES:
             raise ValueError("select the type of coarse aggregate")
         if g("grading") not in pr["gradings"]:
@@ -489,22 +512,31 @@ def _preset_items(pr: dict, form) -> list:
         if g("use") not in lib.USES:
             raise ValueError("select the concrete use")
         return lib.coarse_set(g("source"), g("grading"), g("use"), g("m65") == "on", g("frost") == "on")
-    if pr["category"] == "Fine aggregate":
+    if pr["set"] == "fine":
         if g("source") not in pr["sources"]:
             raise ValueError("select the type of fine aggregate")
         if g("zone") not in lib.FINE_ZONES:
             raise ValueError("select the grading zone to check against")
         return lib.fine_set(g("source"), g("zone"), g("frost") == "on")
-    q = {"kind": pr["cement"], "phys_freq": form.get("phys_freq", ""), "chem_freq": form.get("chem_freq", ""),
-         "declared": g("declared")}
-    return _cement_set(q)
+    if pr["set"] is None or (pr.get("optional") and g("apply") != "on"):
+        return []
+    opts = {f: form.get(f, "") for f in SHARED_FIELDS}
+    opts.update({f.name: g(f.name) for f in _preset_fields(pr)})
+    opts.update(pr.get("fixed", {}))
+    return ts.build(pr["set"], opts)
 
 
 def _presets_ctx(db: Session) -> dict:
     existing = {m.name.lower(): m for m in db.scalars(select(Material)).all()}
-    return {"presets": PRESETS, "coarse_sources": lib.COARSE_SOURCES, "zones": list(lib.FINE_ZONES), "uses": lib.USES,
-            "frequencies": lib.FREQUENCIES, "existing": existing,
-            "sources_list": lib.SOURCES + cem.SOURCES}
+    groups: dict[str, list] = {}
+    for pr in PRESETS:
+        groups.setdefault(pr["group"], []).append(pr)
+    sources = list(lib.SOURCES)
+    for t in ts.SETS.values():
+        sources += [s for s in t.sources if s not in sources]
+    return {"groups": groups, "coarse_sources": lib.COARSE_SOURCES, "zones": list(lib.FINE_ZONES), "uses": lib.USES,
+            "frequencies": lib.FREQUENCIES, "existing": existing, "preset_fields": _preset_fields, "SETS": ts.SETS,
+            "sources_list": sources}
 
 
 @router.get("/standard-materials")
@@ -545,13 +577,19 @@ async def presets_apply(request: Request, db: Session = Depends(get_db), user: U
             db.add(m)
             db.flush()
             audit.record(db, user, "create", "material", m.id, {"name": name, "category": pr["category"], "preset": pr["key"]})
-        added, updated, _ = _upsert_params(db, m, items)
-        db.flush()
-        audit.record(db, user, "apply_standard_set", "material", m.id, {
-            "material": name, "preset": pr["key"],
-            "options": {k: str(v) for k, v in form.items() if k.startswith(pr["key"] + "_") or k in ("phys_freq", "chem_freq")},
-            "added": added, "updated": updated})
-        done.append(f"{name} ({'new' if created else 'existing'}, {added} added, {updated} updated)")
+        added = updated = 0
+        if items:
+            added, updated, _ = _upsert_params(db, m, items)
+            db.flush()
+            audit.record(db, user, "apply_standard_set", "material", m.id, {
+                "material": name, "preset": pr["key"],
+                "options": {k: str(v) for k, v in form.items() if k.startswith(pr["key"] + "_") or k in SHARED_FIELDS},
+                "added": added, "updated": updated})
+        if created or items:
+            done.append(f"{name} ({'new' if created else 'existing'}"
+                        + (f", {added} added, {updated} updated" if items else ", no test set") + ")")
+        else:
+            done.append(f"{name} (already exists, nothing changed)")
     db.commit()
     flash(request, "Materials set up: " + "; ".join(done) + ".")
     return redirect("/setup#materials")

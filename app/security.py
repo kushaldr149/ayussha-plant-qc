@@ -36,6 +36,9 @@ PERMISSIONS = {
     "ncr.raise": {"admin", "qc", "operator"},
     "ncr.manage": {"admin", "qc"},
     "equipment.write": {"admin", "qc"},
+    "process.write": {"admin", "qc", "operator"},   # coating, grinding, packing
+    "process.decide": {"admin", "qc"},               # decision on coating/grinding output lots
+    "sitemix.write": {"admin", "qc", "operator"},
 }
 
 

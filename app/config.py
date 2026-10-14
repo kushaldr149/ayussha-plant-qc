@@ -63,3 +63,7 @@ def local_today():
     from datetime import datetime
 
     return datetime.now(TZ).date()
+
+# Address printed in the QR code on bag labels, for example http://192.168.1.20:8000 so that a phone on the plant
+# network can open the bag's page. If empty, the address used to open the app is used.
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")

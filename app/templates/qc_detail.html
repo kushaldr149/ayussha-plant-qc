@@ -73,5 +73,14 @@ Fineness modulus = {{ w.results.fm }}{% endif %}</div>
   <ul class="alist">{% for c in used_in %}<li><a href="/production/{{ c.record_id }}"><span class="mono">{{ c.record.record_no }}</span><span class="t">{{ c.record.product_line }} · {{ c.actual|num }} {{ c.unit }}</span><span class="d">{{ c.record.prod_date|d }}</span></a></li>{% endfor %}</ul>
   {% else %}<p class="muted" style="margin:0">Not used in any production record yet.</p>{% endif %}
 </div>
+{% if used_process or used_packs %}
+<div class="panel">
+  <div class="panel-head"><h2>Used in coating, grinding and bags</h2><span class="muted small">Forward traceability of this lot</span></div>
+  <ul class="alist">
+    {% for i, b in used_process %}<li><a href="/process/batches/{{ b.id }}"><span class="mono">{{ b.batch_no }}</span><span class="t">{{ b.kind|capitalize }} → {{ b.output_material_name }} · {{ i.qty|num }} {{ i.unit }}</span><span class="d">{{ b.batch_date|d }}</span></a></li>{% endfor %}
+    {% for it, p in used_packs %}<li><a href="/packs/{{ p.id }}"><span class="mono">{{ p.pack_no }}</span><span class="t">{{ p.kind }} · {{ it.actual|num }} {{ it.unit }} · {{ p.status }}</span><span class="d">{{ p.pack_date|d }}</span></a></li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
 {% if can("records.delete") %}{{ delete_form("/qc/%d/delete" % t.id, csrf, "Delete this test") }}{% endif %}
 {% endblock %}

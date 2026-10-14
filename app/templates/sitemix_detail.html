@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ mix.mix_no }}{% endblock %}
+{% block content %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/dispatch/{{ mix.dispatch_id }}">{{ mix.dispatch.dispatch_no }}</a> · {{ mix.dispatch.order.customer.name }}</p><h1>Site mixing <span class="mono">{{ mix.mix_no }}</span></h1></div>
+  <div class="row"><a class="btn ghost" href="/process">Plant process</a></div></div>
+<div class="grid2">
+  <div class="panel"><dl class="kv">
+    <dt>Date</dt><dd>{{ mix.mix_date|d }}</dd>
+    <dt>Started / finished</dt><dd>{{ mix.started_at|dt }} / {{ mix.finished_at|dt }}</dd>
+    <dt>Element</dt><dd>{{ mix.element or "—" }}</dd>
+    <dt>Volume</dt><dd class="mono">{{ (mix.volume_m3|num ~ " m³") if mix.volume_m3 is not none else "—" }}</dd>
+    <dt>Water added</dt><dd class="mono">{{ (mix.water_l|num ~ " L") if mix.water_l is not none else "—" }}</dd>
+    <dt>Mixing time</dt><dd class="mono">{{ (mix.mixing_time_min|num ~ " min") if mix.mixing_time_min is not none else "—" }}</dd>
+    <dt>Slump / flow</dt><dd class="mono">{{ (mix.slump_mm|num ~ " mm") if mix.slump_mm is not none else "—" }} / {{ (mix.flow_mm|num ~ " mm") if mix.flow_mm is not none else "—" }}</dd>
+    <dt>Concrete / ambient temp.</dt><dd class="mono">{{ (mix.concrete_temp_c|num ~ " °C") if mix.concrete_temp_c is not none else "—" }} / {{ (mix.ambient_temp_c|num ~ " °C") if mix.ambient_temp_c is not none else "—" }}</dd>
+    <dt>Supervisor</dt><dd>{{ mix.supervisor or "—" }}</dd>
+    {% if mix.cube_sample %}<dt>Cubes cast</dt><dd><a class="mono" href="/strength/{{ mix.cube_sample.id }}">{{ mix.cube_sample.sample_no }}</a></dd>{% endif %}
+    <dt>Entered by</dt><dd>{{ mix.created_by.display if mix.created_by else "—" }} <span class="muted small">· {{ mix.created_at|dt }}</span></dd>
+    {% if mix.remarks %}<dt>Remarks</dt><dd style="white-space:pre-wrap">{{ mix.remarks }}</dd>{% endif %}
+  </dl></div>
+  <div class="panel"><h2 style="margin-bottom:8px">From the bags used</h2><dl class="kv">
+    <dt>Cementitious material</dt><dd class="mono">{{ s.binder_kg|num }} kg</dd>
+    <dt>Aggregate</dt><dd class="mono">{{ s.aggregate_kg|num }} kg</dd>
+    <dt>Water / cementitious ratio</dt><dd class="mono">{{ "%.3f"|format(s.wb) if s.wb is not none else "—" }}</dd>
+  </dl>
+  <p class="small muted" style="margin:8px 0 0">Calculated from the packed weights on the bags and the water entered, taking 1 litre of water as 1 kg. Water already in the aggregates and in the admixture is not included.{% if s.unknown_units %} Some bag lines are not in kg or t and were left out.{% endif %}</p></div>
+</div>
+<div class="panel">
+  <h2 style="margin-bottom:8px">Bags mixed</h2>
+  <div class="tablewrap"><table class="data"><thead><tr><th>Bag</th><th>Contents (lot)</th><th class="num">Net kg</th></tr></thead><tbody>
+    {% for p in mix.packs %}<tr><td><a class="mono" href="/packs/{{ p.id }}">{{ p.pack_no }}</a><div class="muted small">{{ p.kind }}</div></td>
+      <td class="small">{% for it in p.items %}{{ it.material_name }} {{ it.actual|num }} {{ it.unit }} (lot {{ it.lot_no or "—" }}){% if not loop.last %} · {% endif %}{% endfor %}</td>
+      <td class="num mono">{{ p.net_kg|num if p.net_kg is not none else "—" }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+<div class="panel">
+  <h2 style="margin-bottom:8px">Admixture dosed</h2>
+  {% if mix.admixtures %}<div class="tablewrap"><table class="data"><thead><tr><th>Barrel</th><th>Admixture (lot)</th><th class="num">Dose</th></tr></thead><tbody>
+    {% for a in mix.admixtures %}<tr><td><a class="mono" href="/packs/{{ a.pack.id }}">{{ a.pack.pack_no }}</a></td>
+      <td class="small">{% for it in a.pack.items %}{{ it.material_name }} (lot {{ it.lot_no or "—" }}){% endfor %}</td><td class="num mono">{{ a.dose|num }} {{ a.unit }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="muted" style="margin:0">None recorded.</p>{% endif %}
+</div>
+{% endblock %}

@@ -119,7 +119,17 @@ def qc_detail(test_id: int, request: Request, db: Session = Depends(get_db), use
     used_in = db.scalars(
         select(ProductionComponent).where(ProductionComponent.lot_test_id == test.id).limit(100)
     ).all()
-    return render(request, db, user, "qc_detail.html", t=test, used_in=used_in, **result_view(test))
+    return render(request, db, user, "qc_detail.html", t=test, used_in=used_in, **result_view(test), **_trace(db, test))
+
+
+def _trace(db: Session, test: QCTest) -> dict:
+    """Coating/grinding batches and bags that used this lot."""
+    from ..models import Pack, PackItem, ProcessBatch, ProcessInput
+    proc = db.execute(select(ProcessInput, ProcessBatch).join(ProcessBatch, ProcessBatch.id == ProcessInput.batch_id)
+                      .where(ProcessInput.lot_test_id == test.id).limit(200)).all()
+    packs = db.execute(select(PackItem, Pack).join(Pack, Pack.id == PackItem.pack_id)
+                       .where(PackItem.lot_test_id == test.id).order_by(Pack.pack_no).limit(500)).all()
+    return {"used_process": proc, "used_packs": packs}
 
 
 _SIEVE_NAME = re.compile(r"^Passing (\d+(?:\.\d+)?) (mm|µm) sieve$")
@@ -169,7 +179,7 @@ async def qc_decision(test_id: int, request: Request, db: Session = Depends(get_
     except services.ValidationError as e:
         used_in = db.scalars(select(ProductionComponent).where(ProductionComponent.lot_test_id == test.id)).all()
         return render(request, db, user, "qc_detail.html", status_code=400, t=test, used_in=used_in, errors=e.messages,
-                      **result_view(test))
+                      **result_view(test), **_trace(db, test))
     flash(request, "Decision saved.")
     return redirect(f"/qc/{test.id}")
 
@@ -179,11 +189,15 @@ def qc_delete(test_id: int, request: Request, db: Session = Depends(get_db), use
     test = _get(db, test_id)
     from ..models import NCR
     used = db.scalar(select(func.count(ProductionComponent.id)).where(ProductionComponent.lot_test_id == test.id))
+    from ..models import PackItem, ProcessBatch, ProcessInput
+    used += (db.scalar(select(func.count(ProcessInput.id)).where(ProcessInput.lot_test_id == test.id)) or 0) + \
+            (db.scalar(select(func.count(PackItem.id)).where(PackItem.lot_test_id == test.id)) or 0) + \
+            (db.scalar(select(func.count(ProcessBatch.id)).where(ProcessBatch.qc_test_id == test.id)) or 0)
     if db.scalar(select(func.count(NCR.id)).where(NCR.qc_test_id == test.id)):
         flash(request, "An NCR refers to this test, so it cannot be deleted.", "error")
         return redirect(f"/qc/{test.id}")
     if used:
-        flash(request, f"This lot is referenced by {used} production component(s), so the test cannot be deleted.", "error")
+        flash(request, f"This lot is referenced by {used} production, process or bag record(s), so the test cannot be deleted.", "error")
         return redirect(f"/qc/{test.id}")
     audit.record(db, user, "delete", "qc_test", test.test_no, {"material": test.material_name, "lot": test.lot_no})
     db.delete(test)

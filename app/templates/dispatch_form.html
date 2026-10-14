@@ -18,7 +18,25 @@
     <label class="f"><span>Departure time</span><input type="datetime-local" name="departed_at" id="d_dep" value="{{ v.get('departed_at', '') }}"><span class="hint">Now, if left empty.</span></label>
   </div>
   <div>
-    <div class="panel-head" style="margin-bottom:8px"><h2>Bags loaded</h2><span class="muted small">Only production records with bags still in stock are listed.</span></div>
+    <div class="panel-head" style="margin-bottom:8px"><h2>Jumbo bags, fibre bags and barrels</h2><span class="muted small">Packed for the selected order and not yet loaded.</span></div>
+    {% set chosen = v.get('pack_ids') or [] %}
+    <div class="tablewrap"><table class="data" id="d_packs">
+      <thead><tr><th></th><th>Bag / barrel</th><th>Order</th><th>Contents</th><th class="num">Net kg</th><th>Flags</th></tr></thead>
+      <tbody>
+      {% for p in packs %}
+        <tr data-order="{{ p.order_id }}"><td><input type="checkbox" name="pack_ids" value="{{ p.id }}" id="pk_{{ p.id }}" {% if p.id|string in chosen %}checked{% endif %} aria-label="Load {{ p.pack_no }}"></td>
+          <td><label for="pk_{{ p.id }}" class="mono">{{ p.pack_no }}</label><div class="muted small">{{ p.kind }}</div></td>
+          <td class="mono small">{{ p.order.order_no }}</td>
+          <td class="small">{% for it in p.items %}{{ it.material_name }} {{ it.actual|num }} {{ it.unit }}{% if not loop.last %} · {% endif %}{% endfor %}</td>
+          <td class="num mono">{{ p.net_kg|num if p.net_kg is not none else "—" }}</td>
+          <td>{% if p.lot_issue %}<span class="chip fail">Lot not accepted</span>{% endif %}{% if p.batching_status == "over" %}<span class="chip fail">Over tolerance</span>{% endif %}</td></tr>
+      {% else %}
+        <tr><td colspan="6" class="empty">No packed bags waiting. Pack them in Plant process → Bags.</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+  </div>
+  <div>
+    <div class="panel-head" style="margin-bottom:8px"><h2>Bags from production records</h2><span class="muted small">Only production records with bags still in stock are listed.</span></div>
     <div class="comp-head disp" aria-hidden="true"><span>Production record</span><span>Bags</span><span>In stock</span></div>
     <div class="comps" id="d_items"></div>
     <div style="margin-top:10px"><button type="button" class="btn" id="d_add">Add line</button></div>

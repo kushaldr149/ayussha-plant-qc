@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import dec_chip, prod_chip, delete_form %}
+{% from "_macros.html" import dec_chip, prod_chip, pack_chip, delete_form %}
 {% block title %}{{ d.dispatch_no }}{% endblock %}
 {% block content %}
 {% set v = form if form else {} %}
@@ -7,6 +7,7 @@
   <div><p class="muted mono" style="margin:0">{{ d.dispatch_no }}</p><h1>{{ d.order.customer.name }}{% if d.order.site %} · {{ d.order.site.name }}{% endif %}</h1></div>
   <div class="row">
     <a class="btn" href="/dispatch/{{ d.id }}/note.pdf" target="_blank" rel="noopener">Delivery note (PDF)</a>
+    {% if can("sitemix.write") and packs %}<a class="btn primary" href="/site-mix/new?dispatch_id={{ d.id }}">Record site mixing</a>{% endif %}
     {% if can("strength.write") %}<a class="btn" href="/strength/new?dispatch={{ d.id }}">Record cubes cast</a>{% endif %}
     {% if can("ncr.raise") %}<a class="btn" href="/ncr/new?dispatch_id={{ d.id }}&amp;source=Dispatch">Raise NCR</a>{% endif %}
     <a class="btn ghost" href="/dispatch">All dispatches</a>
@@ -45,6 +46,20 @@
   </div>
 </div>
 
+{% if packs %}
+<div class="panel">
+  <div class="panel-head"><h2>Jumbo bags, fibre bags and barrels loaded</h2><span class="muted small">Open a bag for its lots</span></div>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Bag / barrel</th><th>Contents (lot)</th><th class="num">Net kg</th><th>Status</th></tr></thead>
+    <tbody>{% for p in packs %}
+      <tr><td><a class="mono" href="/packs/{{ p.id }}">{{ p.pack_no }}</a><div class="muted small">{{ p.kind }}</div></td>
+        <td class="small">{% for it in p.items %}{{ it.material_name }} {{ it.actual|num }} {{ it.unit }} (lot {{ it.lot_no or "—" }}){% if not loop.last %} · {% endif %}{% endfor %}</td>
+        <td class="num mono">{{ p.net_kg|num if p.net_kg is not none else "—" }}</td><td>{{ pack_chip(p.status) }}</td></tr>
+    {% endfor %}</tbody></table></div>
+  {% if mixes %}<ul class="alist" style="margin-top:10px">{% for m in mixes %}<li><a href="/site-mix/{{ m.id }}"><span class="mono">{{ m.mix_no }}</span><span class="t">Site mixing · {{ m.element or "—" }}{% if m.volume_m3 is not none %} · {{ m.volume_m3|num }} m³{% endif %}</span><span class="d">{{ m.mix_date|d }}</span></a></li>{% endfor %}</ul>{% endif %}
+</div>
+{% endif %}
+{% if d.items %}
 <div class="panel">
   <div class="panel-head"><h2>Bags loaded and traceability</h2><span class="muted small">Each production record and the material lots it used</span></div>
   <div class="tablewrap"><table class="data">
@@ -57,6 +72,7 @@
     {% endfor %}
     </tbody></table></div>
 </div>
+{% endif %}
 
 <div class="grid2">
   <div class="panel"><div class="panel-head"><h2>Strength samples</h2></div>

@@ -74,7 +74,7 @@ def test_standard_materials_page(admin):
     assert r.status_code == 400
     assert "20 mm down: select the type of coarse aggregate" in r.text
     assert "M-sand: select the type of fine aggregate" in r.text
-    assert "OPC-43 grade: select how often" in r.text
+    assert "OPC-43 grade: how often your lab runs the physical tests: select or enter a value." in r.text
     assert _mat("20 mm down")[0] is None
 
     data = {
@@ -103,7 +103,7 @@ def test_standard_materials_page(admin):
     m, p = _mat("PSC")
     assert p["Magnesia (MgO)"].max_value == 10.0
     setup = admin.get("/setup").text
-    assert "/cement\">Cement IS set" in setup
+    assert "/set\">IS test set" in setup
 
     # Running it again applies the sets to the existing materials instead of failing.
     admin.get("/setup/standard-materials")
@@ -122,14 +122,16 @@ def test_cement_page_preview_and_apply(admin):
     admin.get("/setup/materials/new")
     admin.post("/setup/materials/new", {"name": "Fixture OPC", "category": "Cement", "stock_unit": "kg"})
     m, _ = _mat("Fixture OPC")
-    page = admin.get(f"/setup/materials/{m.id}/cement?preview=1&kind=OPC+43&phys_freq=Every+lot").text
-    assert "Select how often your lab runs" in page
-    page = admin.get(f"/setup/materials/{m.id}/cement?preview=1&kind=OPC+43&phys_freq=Every+lot&chem_freq=Monthly").text
+    page = admin.get(f"/setup/materials/{m.id}/set?preview=1&set=opc43&phys_freq=Every+lot").text
+    assert "How often your lab runs the chemical tests: select or enter a value." in page
+    page = admin.get(f"/setup/materials/{m.id}/set?preview=1&set=opc43&phys_freq=Every+lot&chem_freq=Monthly").text
     assert "43 – 58 MPa" in page
-    r = admin.post(f"/setup/materials/{m.id}/cement", {"kind": "OPC 43", "phys_freq": "Every lot", "chem_freq": "Monthly"})
+    r = admin.post(f"/setup/materials/{m.id}/set", {"set": "opc43", "phys_freq": "Every lot", "chem_freq": "Monthly"})
     assert r.status_code == 303
     assert _mat("Fixture OPC")[1]["Compressive strength, 28 days (672 ± 4 h)"].max_value == 58
     # Not offered for an aggregate material.
     sand, _ = _mat("M-sand")
-    r = admin.get(f"/setup/materials/{sand.id}/cement", follow_redirects=False)
+    r = admin.get(f"/setup/materials/{sand.id}/set", follow_redirects=False)
     assert r.status_code == 303
+    r = admin.post(f"/setup/materials/{sand.id}/set", {"set": "opc43", "phys_freq": "Every lot", "chem_freq": "Monthly"})
+    assert r.status_code == 303 and "Passing 600 µm sieve" in str(_mat("M-sand")[1].keys())

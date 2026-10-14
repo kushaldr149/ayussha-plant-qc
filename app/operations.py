@@ -180,6 +180,8 @@ def save_order(db: Session, user: User, form, order: Order | None = None) -> Ord
     if site and customer and site.customer_id != customer.id:
         errors.append("The site does not belong to this customer.")
     grade = db.get(ConcreteGrade, _int_or_none(form.get("grade_id")) or 0) if form.get("grade_id") else None
+    from .models import Recipe
+    recipe = db.get(Recipe, _int_or_none(form.get("recipe_id")) or 0) if form.get("recipe_id") else None
     qty = parse_num(form.get("quantity_m3"), "Quantity", errors)
     req = None
     if _s(form, "required_date"):
@@ -204,6 +206,7 @@ def save_order(db: Session, user: User, form, order: Order | None = None) -> Ord
     order.order_date, order.customer_id = order_date, customer.id
     order.site_id = site.id if site else None
     order.grade_id = grade.id if grade else None
+    order.recipe_id = recipe.id if recipe else None
     order.quantity_m3, order.required_date, order.status = qty, req, status
     order.customer_ref, order.remarks = _s(form, "customer_ref"), _s(form, "remarks")
     db.flush()
@@ -271,8 +274,20 @@ def save_dispatch(db: Session, user: User, form) -> Dispatch:
             errors.append(f"Line {i}: enter the number of bags as a whole number.")
             continue
         rows.append((rec, bags))
-    if not rows and not errors:
-        errors.append("Add at least one line with bags from a production record.")
+    from .models import Pack
+    packs = []
+    for raw in form.get("pack_ids") or []:
+        pk = db.get(Pack, _int_or_none(raw) or 0)
+        if not pk:
+            errors.append("A selected bag does not exist.")
+        elif order and pk.order_id != order.id:
+            errors.append(f"{pk.pack_no} was packed for another order.")
+        elif pk.status != "Packed":
+            errors.append(f"{pk.pack_no} is {pk.status.lower()}; only packed bags can be loaded.")
+        else:
+            packs.append(pk)
+    if not rows and not packs and not errors:
+        errors.append("Tick the bags and barrels loaded, or add a line with bags from a production record.")
     if rows:
         ids = [r.id for r, _ in rows]
         if len(set(ids)) != len(ids):
@@ -283,9 +298,15 @@ def save_dispatch(db: Session, user: User, form) -> Dispatch:
             if bags > available:
                 errors.append(f"{rec.record_no}: only {available} bag(s) available, {bags} entered.")
         flagged = [rec.record_no for rec, _ in rows if rec.lot_issue or rec.status == "over"]
+        flagged += [pk.pack_no for pk in packs if pk.lot_issue or pk.batching_status == "over"]
         if flagged and not remarks and not errors:
             errors.append("Add a remark to dispatch bags from records flagged for lots not accepted or "
                           f"over tolerance ({', '.join(flagged)}).")
+    if packs and not rows:
+        flagged_packs = [pk.pack_no for pk in packs if pk.lot_issue or pk.batching_status == "over"]
+        if flagged_packs and not remarks and not errors:
+            errors.append("Add a remark to dispatch bags flagged for lots not accepted or over tolerance "
+                          f"({', '.join(flagged_packs)}).")
     if errors:
         raise ValidationError(errors)
 
@@ -300,8 +321,11 @@ def save_dispatch(db: Session, user: User, form) -> Dispatch:
     except IntegrityError:
         db.rollback()
         raise ValidationError(["Another dispatch was saved at the same moment. Save again."])
+    for pk in packs:
+        pk.dispatch_id, pk.status = disp.id, "Loaded"
     audit.record(db, user, "create", "dispatch", disp.dispatch_no, {
-        "order": order.order_no, "items": [(rec.record_no, bags) for rec, bags in rows]})
+        "order": order.order_no, "items": [(rec.record_no, bags) for rec, bags in rows],
+        "packs": [pk.pack_no for pk in packs]})
     db.commit()
     return disp
 
@@ -325,6 +349,12 @@ def update_delivery(db: Session, user: User, disp: Dispatch, form) -> None:
     if status == "Delivered":
         disp.delivered_at = delivered_at or disp.delivered_at or utcnow()
         disp.delivered_by_id = user.id
+    from .models import Pack
+    for pk in db.scalars(select(Pack).where(Pack.dispatch_id == disp.id, Pack.status == "Loaded")).all():
+        if status == "Cancelled":
+            pk.dispatch_id, pk.status = None, "Packed"   # back in the plant, can be loaded again
+        elif status == "Returned":
+            pk.status = "Returned"
     audit.record(db, user, "update", "dispatch", disp.dispatch_no, {"before": before, "status": status})
     db.commit()
 
@@ -478,7 +508,8 @@ class MaterialStock:
 
 
 def raw_stock(db: Session) -> list[MaterialStock]:
-    """Stock per material and lot = quantity received on QC tests − actual used in production ± adjustments.
+    """Stock per material and lot = quantity received on QC tests (or produced by a coating/grinding batch)
+    − used in production, coating, grinding and bags ± adjustments.
 
     Quantities are converted to the material's stock unit where the units are of the same kind (kg/t, L/mL).
     Quantities that cannot be converted are listed, not guessed.
@@ -493,10 +524,43 @@ def raw_stock(db: Session) -> list[MaterialStock]:
             ms.lots[k] = LotBalance(lot=key or "(no lot)")
         return ms.lots[k]
 
+    from .models import Pack, PackItem, ProcessBatch, ProcessInput
+    batches = db.scalars(select(ProcessBatch).order_by(ProcessBatch.batch_date, ProcessBatch.id)).all()
+    batch_lots = {(b.output_material_id, b.output_lot_no.strip().lower()) for b in batches}
+    for b in batches:  # output of coating / grinding is received into the in-house material's lot
+        ms = stock.get(b.output_material_id)
+        if ms is None:
+            continue
+        lb = lot_of(ms, b.output_lot_no)
+        lb.decision = b.decision
+        lb.last_date = b.batch_date
+        q = logic.convert(b.output_qty, b.output_unit, ms.unit) if b.output_qty is not None else None
+        if b.output_qty is not None and q is None:
+            ms.unconverted.append(f"{b.batch_no}: {b.output_qty:g} {b.output_unit}")
+        elif q is not None:
+            lb.received += q
+    usage = [(i.material_id, i.lot_no, i.qty, i.unit, d, n) for i, d, n in db.execute(
+        select(ProcessInput, ProcessBatch.batch_date, ProcessBatch.batch_no)
+        .join(ProcessBatch, ProcessBatch.id == ProcessInput.batch_id)).all()]
+    usage += [(i.material_id, i.lot_no, i.actual, i.unit, d, n) for i, d, n in db.execute(
+        select(PackItem, Pack.pack_date, Pack.pack_no).join(Pack, Pack.id == PackItem.pack_id)).all()]
+    for mid, lot, qty, unit, d, ref in usage:
+        ms = stock.get(mid)
+        if ms is None:
+            continue
+        lb = lot_of(ms, lot)
+        q = logic.convert(qty, unit, ms.unit)
+        if q is None:
+            ms.unconverted.append(f"{ref}: {qty:g} {unit}")
+        else:
+            lb.used += q
+        lb.last_date = max(filter(None, [lb.last_date, d]))
     for t in db.scalars(select(QCTest).order_by(QCTest.test_date, QCTest.id)).all():
         ms = stock.get(t.material_id)
         if ms is None:
             continue
+        if (t.material_id, (t.lot_no or "").strip().lower()) in batch_lots:
+            continue  # a test on a coating/grinding output: the batch holds the quantity and the decision
         lb = lot_of(ms, t.lot_no)
         lb.decision = t.decision
         lb.last_date = t.test_date

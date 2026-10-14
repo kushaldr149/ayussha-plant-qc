@@ -45,7 +45,10 @@ def fmt_dt(value: datetime | None) -> str:
 templates.env.filters["num"] = fmt_num
 templates.env.filters["d"] = fmt_date
 templates.env.filters["dt"] = fmt_dt
+from .standard_sets import SETS as _SETS  # noqa: E402
+
 templates.env.globals.update(
+    SET_CATEGORIES=sorted({c for t in _SETS.values() for c in t.categories}),
     STATUS=logic.STATUS_LABELS, PROD=logic.PRODUCTION_LABELS, STRENGTH=logic.STRENGTH_LABELS, ROLES=ROLES, DECISIONS=DECISIONS,
     CATEGORIES=CATEGORIES, UNITS=UNITS, limit_text=logic.limit_text, limit_display=logic.limit_display, value_display=logic.value_display, APP_NAME=config.APP_NAME,
 )

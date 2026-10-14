@@ -391,5 +391,13 @@
     box.addEventListener("input", (e) => { const r = e.target.closest(".comp"); if (r) update(r); });
     box.addEventListener("change", (e) => { const r = e.target.closest(".comp"); if (r) update(r); });
     box.addEventListener("click", (e) => { if (e.target.hasAttribute("data-remove")) { e.target.closest(".comp").remove(); if (!box.children.length) add(); } });
+    // Show only the bags packed for the selected order.
+    const order = $("#d_order"), packRows = Array.from(document.querySelectorAll("#d_packs tbody tr[data-order]"));
+    const filterPacks = () => packRows.forEach((tr) => {
+      const show = !order.value || tr.dataset.order === order.value;
+      tr.hidden = !show;
+      if (!show) $("input", tr).checked = false;
+    });
+    if (order && packRows.length) { order.addEventListener("change", filterPacks); filterPacks(); }
   }
 })();
