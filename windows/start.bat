@@ -1,5 +1,5 @@
 @echo off
-rem Ayussha Plant QC - start the app on Windows. Keep this window open while the app is in use.
+rem Ayussha Plant - start the app on Windows. Keep this window open while the app is in use.
 setlocal
 cd /d "%~dp0.."
 
@@ -21,7 +21,7 @@ if "%HOST%"=="" set "HOST=127.0.0.1"
 if "%PORT%"=="" set "PORT=8000"
 
 echo.
-echo Ayussha Plant QC is starting.
+echo Ayussha Plant is starting.
 if "%HOST%"=="127.0.0.1" (
   echo Open http://127.0.0.1:%PORT% in a browser on this computer.
 ) else (

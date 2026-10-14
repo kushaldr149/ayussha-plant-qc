@@ -1,4 +1,4 @@
-"""Ayussha Plant QC: web application entry point."""
+"""Ayussha Plant: web application entry point."""
 from __future__ import annotations
 
 import logging

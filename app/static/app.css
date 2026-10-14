@@ -1,4 +1,4 @@
-/* Ayussha Plant QC. Layout: top bar + section nav; each page is a toolbar, then a working table or form. */
+/* Ayussha Plant. Layout: top bar + section nav; each page is a toolbar, then a working table or form. */
 :root{
   --bg:#E8EBE9; --surface:#F7F8F7; --surface-2:#EEF1EF; --ink:#18201E; --muted:#59645F; --line:#C9D0CC;
   --accent:#1D5870; --accent-ink:#FFFFFF; --accent-soft:#D5E5EB;

@@ -1,4 +1,4 @@
-# Ayussha Plant QC
+# Ayussha Plant
 
 Web application for the dry mix concrete plant: inward material QC, the production log with lot
 traceability, PDF test reports and batch certificates, Excel exports, user logins with roles, an audit

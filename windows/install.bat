@@ -1,5 +1,5 @@
 @echo off
-rem Ayussha Plant QC - one-time setup on Windows.
+rem Ayussha Plant - one-time setup on Windows.
 rem Needs Python 3.11 or newer from https://www.python.org/downloads/ (tick "Add python.exe to PATH" when installing).
 setlocal
 cd /d "%~dp0.."

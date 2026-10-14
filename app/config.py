@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-APP_NAME = os.environ.get("APP_NAME", "Ayussha Plant QC")
+APP_NAME = os.environ.get("APP_NAME", "Ayussha Plant")
 
 # SQLite file in DATA_DIR by default. For PostgreSQL set e.g.
 # DATABASE_URL=postgresql+psycopg://user:password@host:5432/plantqc

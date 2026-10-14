@@ -1,4 +1,4 @@
-/* Ayussha Plant QC: small enhancements for the server-rendered pages. Everything still submits as plain forms. */
+/* Ayussha Plant: small enhancements for the server-rendered pages. Everything still submits as plain forms. */
 (function () {
   "use strict";
   const $ = (s, r = document) => r.querySelector(s);
