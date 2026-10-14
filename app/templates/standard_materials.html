@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Add standard materials{% endblock %}
+{% block content %}
+{% set fresh = not form %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/setup">Setup</a></p>
+<h1>Add standard materials</h1>
+<p class="muted">Creates each ticked material with its IS test set: IS 383:2016 / IS 2386 for aggregates, IS 269, IS 1489 (Part 1) or IS 455 for cement. Choose the options for each one; nothing is pre-selected. If a material with the same name already exists, the test set is applied to it instead.</p></div></div>
+
+<form method="post" action="/setup/standard-materials" class="stack" style="display:grid;gap:14px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {% for pr in presets %}{% set k = pr.key %}
+  {% set nm = form.get(k ~ "_name") or pr.name %}
+  <div class="panel">
+    <div class="panel-head" style="margin-bottom:10px">
+      <label class="check"><input type="checkbox" name="{{ k }}_on" id="p_{{ k }}" {% if fresh or form.get(k ~ '_on') == 'on' %}checked{% endif %}>
+        <strong>{{ pr.category }}</strong></label>
+      {% if nm.lower() in existing %}<span class="chip hold">Exists · set will be applied to it</span>{% endif %}
+    </div>
+    <div class="fgrid">
+      <label class="f"><span>Material name</span><input name="{{ k }}_name" id="n_{{ k }}" value="{{ nm }}" maxlength="160"></label>
+      {% if pr.category == "Coarse aggregate" %}
+        <label class="f"><span>Type of coarse aggregate</span><select name="{{ k }}_source" id="s_{{ k }}"><option value="">— Select —</option>
+          {% for s in coarse_sources %}<option {% if form.get(k ~ '_source') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+        <label class="f"><span>Grading (IS 383 Table 7)</span><select name="{{ k }}_grading" id="g_{{ k }}"><option value="">— Select —</option>
+          {% for g in pr.gradings %}<option {% if form.get(k ~ '_grading') == g %}selected{% endif %}>{{ g }}</option>{% endfor %}</select>
+          <span class="hint">Graded = one material covering the size range. Single-sized = one size, blended with others.</span></label>
+        <label class="f"><span>Concrete use (IS 383 cl. 5.4)</span><select name="{{ k }}_use" id="u_{{ k }}"><option value="">— Select —</option>
+          {% for key, label in uses.items() %}<option value="{{ key }}" {% if form.get(k ~ '_use') == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="check"><input type="checkbox" name="{{ k }}_m65" {% if form.get(k ~ '_m65') == 'on' %}checked{% endif %}> Concrete M65 and above</label>
+        <label class="check"><input type="checkbox" name="{{ k }}_frost" {% if form.get(k ~ '_frost') == 'on' %}checked{% endif %}> Exposed to frost</label>
+      {% elif pr.category == "Fine aggregate" %}
+        <label class="f"><span>Type of fine aggregate (IS 383 cl. 3.1)</span><select name="{{ k }}_source" id="s_{{ k }}"><option value="">— Select —</option>
+          {% for s in pr.sources %}<option {% if form.get(k ~ '_source') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+          <span class="hint">IS 383:2016 cl. 3.1.2.1: crushed stone sand is produced by crushing hard stone. Cl. 3.1.4: "manufactured sand" is made from other than natural sources (for example slag) by thermal or other processes.</span></label>
+        <label class="f"><span>Grading zone to check against (IS 383 Table 9)</span><select name="{{ k }}_zone" id="z_{{ k }}"><option value="">— Select —</option>
+          {% for z in zones %}<option {% if form.get(k ~ '_zone') == z %}selected{% endif %}>{{ z }}</option>{% endfor %}</select>
+          <span class="hint">Every test also shows which zones the grading actually falls in.</span></label>
+        <label class="check"><input type="checkbox" name="{{ k }}_frost" {% if form.get(k ~ '_frost') == 'on' %}checked{% endif %}> Exposed to frost</label>
+      {% else %}
+        {% if pr.cement in ("PPC", "PSC") %}
+        <label class="f"><span>Declared {{ "fly ash" if pr.cement == "PPC" else "slag" }} % (optional)</span><input name="{{ k }}_declared" inputmode="decimal" value="{{ form.get(k ~ '_declared', '') }}">
+          <span class="hint">{% if pr.cement == "PPC" %}Fills the insoluble residue limits (IS 1489 Part 1 Table 1). Allowed 15–35 %.{% else %}Allowed 25–70 % (IS 455 cl. 5).{% endif %}</span></label>
+        {% endif %}
+        <p class="small muted" style="margin:0;align-self:center">{{ {"OPC 43": "IS 269:2015, 43 grade", "OPC 53": "IS 269:2015, 53 grade", "PPC": "IS 1489 (Part 1):2015, fly ash based", "PSC": "IS 455:2015"}[pr.cement] }}</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="panel">
+    <h2 style="margin-bottom:10px">Cement test frequency</h2>
+    <div class="fgrid">
+      <label class="f"><span>How often your lab runs the cement physical tests</span><select name="phys_freq" id="i_pf"><option value="">— Select —</option>
+        {% for f in frequencies %}<option {% if form.get('phys_freq') == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select>
+        <span class="hint">Not set by the standards; this is your plant's choice.</span></label>
+      <label class="f"><span>How often your lab runs the cement chemical tests</span><select name="chem_freq" id="i_cf"><option value="">— Select —</option>
+        {% for f in frequencies %}<option {% if form.get('chem_freq') == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select>
+        <span class="hint">Tests not set to "Every lot" can be left empty when they are not due.</span></label>
+    </div>
+    <p class="small muted" style="margin:10px 0 0">Aggregate test frequencies come from the BIS product manual for IS 383, which the manual calls recommendatory. All frequencies and limits can be changed afterwards per parameter.</p>
+  </div>
+
+  <div class="alert">Aggregate limits are from IS 383:2016 (Third Revision) base text; soft fragments, shale and mica have no limit filled in and need yours. {% include "_cement_note.html" %}</div>
+  <div class="actions"><a class="btn" href="/setup">Cancel</a><button class="btn primary" type="submit">Create ticked materials</button></div>
+</form>
+
+<div class="panel">
+  <h2>Sources</h2>
+  <ul class="small" style="margin:8px 0 0;padding-left:18px">{% for label, url in sources_list %}<li><a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a></li>{% endfor %}</ul>
+</div>
+{% endblock %}

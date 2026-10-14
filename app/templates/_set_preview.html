@@ -1,0 +1,10 @@
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Group</th><th>Parameter</th><th>Limit</th><th>Method · reference</th><th>Frequency</th>{% if show_existing %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+  {% for it in preview %}
+    <tr><td class="muted">{{ it.group }}</td><td>{{ it.name }}{% if it.note %}<div class="muted small">{{ it.note }}</div>{% endif %}</td>
+      <td class="mono nowrap">{% if it.value_type == "passfail" %}Pass required{% else %}{{ limit_text(it.min, it.max, it.unit) }}{% endif %}</td>
+      <td class="small">{{ it.method_text or "—" }}</td><td class="small">{{ it.frequency }}</td>
+      {% if show_existing %}<td>{% if it.name.lower() in existing %}<span class="chip hold">Updates existing</span>{% else %}<span class="chip pass">New</span>{% endif %}</td>{% endif %}</tr>
+  {% endfor %}
+  </tbody></table></div>

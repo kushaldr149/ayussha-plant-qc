@@ -313,6 +313,33 @@ def recipe_delete(rid: int, request: Request, db: Session = Depends(get_db), use
 from .. import is_library as lib  # noqa: E402
 
 
+def _upsert_params(db: Session, m: Material, items: list, deactivate_others: bool = False) -> tuple[int, int, int]:
+    """Add or update a material's parameters from a test set (matched by name). Returns (added, updated, deactivated)."""
+    by_name = {p.name.lower(): p for p in m.parameters}
+    added = updated = 0
+    for order, it in enumerate(items, start=1):
+        p = by_name.get(it.name.lower())
+        if p is None:
+            p = QCParameter(material_id=m.id, name=it.name)
+            db.add(p)
+            m.parameters.append(p)
+            added += 1
+        else:
+            updated += 1
+        p.unit, p.min_value, p.max_value = it.unit, it.min, it.max
+        p.method, p.group_name, p.frequency = it.method_text, it.group, it.frequency
+        p.calc, p.value_type, p.sieve_mm, p.note = it.calc, it.value_type, it.sieve_mm, it.note
+        p.sort_order, p.active = order, True
+    keep = {it.name.lower() for it in items}
+    deactivated = 0
+    if deactivate_others:
+        for p in m.parameters:
+            if p.name.lower() not in keep and p.active:
+                p.active = False
+                deactivated += 1
+    return added, updated, deactivated
+
+
 def _template_options(material: Material) -> dict:
     fine = material.category == "Fine aggregate"
     return {"fine": fine, "coarse_sources": lib.COARSE_SOURCES, "fine_sources": lib.FINE_SOURCES,
@@ -357,27 +384,7 @@ async def is383_apply(mid: int, request: Request, db: Session = Depends(get_db),
     except ValueError as e:
         flash(request, str(e), "error")
         return redirect(f"/setup/materials/{mid}/is383")
-    by_name = {p.name.lower(): p for p in m.parameters}
-    added = updated = 0
-    for order, it in enumerate(items, start=1):
-        p = by_name.get(it.name.lower())
-        if p is None:
-            p = QCParameter(material_id=m.id, name=it.name)
-            db.add(p)
-            added += 1
-        else:
-            updated += 1
-        p.unit, p.min_value, p.max_value = it.unit, it.min, it.max
-        p.method, p.group_name, p.frequency = it.method_text, it.group, it.frequency
-        p.calc, p.value_type, p.sieve_mm, p.note = it.calc, it.value_type, it.sieve_mm, it.note
-        p.sort_order, p.active = order, True
-    keep = {it.name.lower() for it in items}
-    deactivated = 0
-    if form.get("deactivate_others") == "on":
-        for p in m.parameters:
-            if p.name.lower() not in keep and p.active:
-                p.active = False
-                deactivated += 1
+    added, updated, deactivated = _upsert_params(db, m, items, form.get("deactivate_others") == "on")
     db.flush()
     audit.record(db, user, "apply_is383", "material", m.id, {
         "material": m.name, "options": {k: str(form.get(k, "")) for k in ("source", "grading", "zone", "use", "m65", "frost")},
@@ -386,3 +393,165 @@ async def is383_apply(mid: int, request: Request, db: Session = Depends(get_db),
     msg = f"IS 383 test set applied to {m.name}: {added} parameter(s) added, {updated} updated"
     flash(request, msg + (f", {deactivated} other parameter(s) marked inactive." if deactivated else "."))
     return redirect(f"/setup/materials/{mid}")
+
+
+# ---------------------------------------------------------------- cement test sets
+
+from .. import cement_library as cem  # noqa: E402
+
+
+def _cement_opts(q) -> tuple[str, str, str, float | None]:
+    kind = str(q.get("kind", ""))
+    pf, cf = str(q.get("phys_freq", "")), str(q.get("chem_freq", ""))
+    if kind not in cem.TYPES:
+        raise ValueError("Select the cement type.")
+    if pf not in lib.FREQUENCIES or cf not in lib.FREQUENCIES:
+        raise ValueError("Select how often your lab runs the physical tests and the chemical tests.")
+    raw = str(q.get("declared", "")).strip()
+    try:
+        declared = float(raw) if raw else None
+    except ValueError:
+        raise ValueError("Declared fly ash or slag must be a number.") from None
+    return kind, pf, cf, declared
+
+
+def _cement_set(q) -> list:
+    kind, pf, cf, declared = _cement_opts(q)
+    return cem.cement_set(kind, pf, cf, declared if kind in ("PPC", "PSC") else None)
+
+
+def _cement_ctx() -> dict:
+    return {"types": cem.TYPES, "frequencies": lib.FREQUENCIES, "sources_list": cem.SOURCES}
+
+
+@router.get("/materials/{mid}/cement")
+def cement_page(mid: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+    m = db.get(Material, mid) or _404()
+    if m.category != "Cement":
+        flash(request, "Cement test sets are for materials in the Cement category. Change the material's category first.", "warn")
+        return redirect(f"/setup/materials/{mid}")
+    q = request.query_params
+    preview, error = None, None
+    if q.get("preview"):
+        try:
+            preview = _cement_set(q)
+        except ValueError as e:
+            error = str(e)
+    existing = {p.name.lower() for p in m.parameters}
+    return render(request, db, user, "cement_form.html", m=m, o=_cement_ctx(), q=q, preview=preview,
+                  existing=existing, errors=[error] if error else None)
+
+
+@router.post("/materials/{mid}/cement")
+async def cement_apply(mid: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+    m = db.get(Material, mid) or _404()
+    if m.category != "Cement":
+        flash(request, "Cement test sets are for materials in the Cement category.", "error")
+        return redirect(f"/setup/materials/{mid}")
+    form = await request.form()
+    try:
+        items = _cement_set(form)
+    except ValueError as e:
+        flash(request, str(e), "error")
+        return redirect(f"/setup/materials/{mid}/cement")
+    added, updated, deactivated = _upsert_params(db, m, items, form.get("deactivate_others") == "on")
+    db.flush()
+    audit.record(db, user, "apply_cement_set", "material", m.id, {
+        "material": m.name, "options": {k: str(form.get(k, "")) for k in ("kind", "phys_freq", "chem_freq", "declared")},
+        "added": added, "updated": updated, "deactivated": deactivated})
+    db.commit()
+    msg = f"{cem.TYPES[str(form.get('kind'))]} test set applied to {m.name}: {added} parameter(s) added, {updated} updated"
+    flash(request, msg + (f", {deactivated} other parameter(s) marked inactive." if deactivated else "."))
+    return redirect(f"/setup/materials/{mid}")
+
+
+# ---------------------------------------------------------------- standard materials
+
+PRESETS = [
+    {"key": "ca20", "name": "20 mm down", "category": "Coarse aggregate", "gradings": ["Graded 20 mm", "Single-sized 20 mm"]},
+    {"key": "ca12", "name": "12.5 mm down", "category": "Coarse aggregate", "gradings": ["Graded 12.5 mm", "Single-sized 12.5 mm"]},
+    {"key": "msand", "name": "M-sand", "category": "Fine aggregate", "sources": ["Crushed stone sand", "Manufactured"]},
+    {"key": "opc43", "name": "OPC-43 grade", "category": "Cement", "cement": "OPC 43"},
+    {"key": "opc53", "name": "OPC-53 grade", "category": "Cement", "cement": "OPC 53"},
+    {"key": "ppc", "name": "PPC", "category": "Cement", "cement": "PPC"},
+    {"key": "psc", "name": "PSC", "category": "Cement", "cement": "PSC"},
+]
+
+
+def _preset_items(pr: dict, form) -> list:
+    k = pr["key"]
+    g = lambda f: str(form.get(f"{k}_{f}", ""))  # noqa: E731
+    if pr["category"] == "Coarse aggregate":
+        if g("source") not in lib.COARSE_SOURCES:
+            raise ValueError("select the type of coarse aggregate")
+        if g("grading") not in pr["gradings"]:
+            raise ValueError("select the grading")
+        if g("use") not in lib.USES:
+            raise ValueError("select the concrete use")
+        return lib.coarse_set(g("source"), g("grading"), g("use"), g("m65") == "on", g("frost") == "on")
+    if pr["category"] == "Fine aggregate":
+        if g("source") not in pr["sources"]:
+            raise ValueError("select the type of fine aggregate")
+        if g("zone") not in lib.FINE_ZONES:
+            raise ValueError("select the grading zone to check against")
+        return lib.fine_set(g("source"), g("zone"), g("frost") == "on")
+    q = {"kind": pr["cement"], "phys_freq": form.get("phys_freq", ""), "chem_freq": form.get("chem_freq", ""),
+         "declared": g("declared")}
+    return _cement_set(q)
+
+
+def _presets_ctx(db: Session) -> dict:
+    existing = {m.name.lower(): m for m in db.scalars(select(Material)).all()}
+    return {"presets": PRESETS, "coarse_sources": lib.COARSE_SOURCES, "zones": list(lib.FINE_ZONES), "uses": lib.USES,
+            "frequencies": lib.FREQUENCIES, "existing": existing,
+            "sources_list": lib.SOURCES + cem.SOURCES}
+
+
+@router.get("/standard-materials")
+def presets_page(request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+    return render(request, db, user, "standard_materials.html", form={}, **_presets_ctx(db))
+
+
+@router.post("/standard-materials")
+async def presets_apply(request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+    form = await request.form()
+    errors: list[str] = []
+    plan = []
+    for pr in PRESETS:
+        k = pr["key"]
+        if form.get(f"{k}_on") != "on":
+            continue
+        name = str(form.get(f"{k}_name", "")).strip() or pr["name"]
+        try:
+            items = _preset_items(pr, form)
+        except ValueError as e:
+            errors.append(f"{name}: {str(e)[0].lower() + str(e)[1:]}")
+            continue
+        m = db.scalars(select(Material).where(func.lower(Material.name) == name.lower())).first()
+        if m and m.category != pr["category"]:
+            errors.append(f"{name}: a material with this name already exists in the {m.category} category.")
+            continue
+        plan.append((pr, name, m, items))
+    if not plan and not errors:
+        errors.append("Tick at least one material.")
+    if errors:
+        return render(request, db, user, "standard_materials.html", status_code=400, form=form, errors=errors,
+                      **_presets_ctx(db))
+    done = []
+    for pr, name, m, items in plan:
+        created = m is None
+        if created:
+            m = Material(name=name, category=pr["category"])
+            db.add(m)
+            db.flush()
+            audit.record(db, user, "create", "material", m.id, {"name": name, "category": pr["category"], "preset": pr["key"]})
+        added, updated, _ = _upsert_params(db, m, items)
+        db.flush()
+        audit.record(db, user, "apply_standard_set", "material", m.id, {
+            "material": name, "preset": pr["key"],
+            "options": {k: str(v) for k, v in form.items() if k.startswith(pr["key"] + "_") or k in ("phys_freq", "chem_freq")},
+            "added": added, "updated": updated})
+        done.append(f"{name} ({'new' if created else 'existing'}, {added} added, {updated} updated)")
+    db.commit()
+    flash(request, "Materials set up: " + "; ".join(done) + ".")
+    return redirect("/setup#materials")

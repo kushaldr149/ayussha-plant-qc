@@ -4,7 +4,9 @@ Sources read for this module (October 2026):
   * IS 383:2016 Coarse and Fine Aggregate for Concrete - Specification (Third Revision), base text.
     Two copies were compared: the BIS-printed PDF (civilapps.in) and the Internet Archive OCR text
     (archive.org/details/gov.in.is.383.2016). The BIS product manual PM/IS 383/3/August 2020 states the
-    standard has 2 amendments; their content was not available and is NOT reflected here.
+    standard has 2 amendments. Amendment 1 (August 2017, Internet Archive text) changes Table 1 (utilisation of
+    manufactured aggregates) and Table 3 row (iii) (water-soluble chloride, 0.04 % max); neither is in these sets.
+    Amendment 2 was not available and is NOT reflected here.
   * BIS product manual PM/IS 383/3/August 2020: test method per requirement and testing frequency.
   * IS 2386 Parts 1 to 4 (1963, law.resource.org copies): calculation formulas.
 
@@ -52,10 +54,11 @@ class Param:
     value_type: str = "number"  # number / passfail
     sieve_mm: float | None = None
     note: str = ""
+    standard: str = STANDARD
 
     @property
     def method_text(self) -> str:
-        return " · ".join(x for x in (self.method, f"{STANDARD} {self.clause}" if self.clause else "") if x)
+        return " · ".join(x for x in (self.method, f"{self.standard} {self.clause}" if self.clause else "") if x)
 
 
 # ---------------------------------------------------------------- grading tables

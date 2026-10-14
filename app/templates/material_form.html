@@ -20,7 +20,7 @@
 </form>
 {% if m %}
 <div class="panel" style="max-width:760px">
-  <div class="panel-head"><h2>Test parameters</h2><div class="row">{% if m.category in ["Coarse aggregate", "Fine aggregate"] %}<a class="btn primary" href="/setup/materials/{{ m.id }}/is383">Apply IS 383 test set</a>{% endif %}<a class="btn" href="/setup/parameters/new?material={{ m.id }}">Add parameter</a></div></div>
+  <div class="panel-head"><h2>Test parameters</h2><div class="row">{% if m.category in ["Coarse aggregate", "Fine aggregate"] %}<a class="btn primary" href="/setup/materials/{{ m.id }}/is383">Apply IS 383 test set</a>{% elif m.category == "Cement" %}<a class="btn primary" href="/setup/materials/{{ m.id }}/cement">Apply cement test set</a>{% endif %}<a class="btn" href="/setup/parameters/new?material={{ m.id }}">Add parameter</a></div></div>
   {% if m.parameters %}<ul class="alist">{% for p in m.parameters %}<li><a href="/setup/parameters/{{ p.id }}"><span>{{ p.name }}{% if p.group_name %} <span class="muted small">· {{ p.group_name }}</span>{% endif %}</span><span class="t mono">{{ limit_display(p.min_value, p.max_value, p.unit, p.value_type) }}</span><span class="d">{{ p.frequency or "Every lot" }} · {{ "Active" if p.active else "Inactive" }}</span></a></li>{% endfor %}</ul>
   {% else %}<p class="muted" style="margin:0">No parameters yet.</p>{% endif %}
 </div>

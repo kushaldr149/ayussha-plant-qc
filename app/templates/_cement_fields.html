@@ -1,0 +1,15 @@
+<div class="fgrid">
+  <label class="f"><span>Cement type and standard</span><select name="kind" id="i_kind" required>
+    <option value="">— Select —</option>
+    {% for k, label in o.types.items() %}<option value="{{ k }}" {% if q.get('kind') == k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label class="f"><span>How often your lab runs the physical tests</span><select name="phys_freq" id="i_pf" required>
+    <option value="">— Select —</option>
+    {% for f in o.frequencies %}<option {% if q.get('phys_freq') == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select>
+    <span class="hint">Not set by the standards; this is your plant's choice.</span></label>
+  <label class="f"><span>How often your lab runs the chemical tests</span><select name="chem_freq" id="i_cf" required>
+    <option value="">— Select —</option>
+    {% for f in o.frequencies %}<option {% if q.get('chem_freq') == f %}selected{% endif %}>{{ f }}</option>{% endfor %}</select>
+    <span class="hint">Tests set to anything other than "Every lot" can be left empty when they are not due.</span></label>
+  <label class="f"><span>Declared fly ash % (PPC) or slag % (PSC)</span><input name="declared" id="i_decl" inputmode="decimal" value="{{ q.get('declared', '') }}">
+    <span class="hint">Optional. For PPC it fills the insoluble residue limits (IS 1489 Part 1 Table 1). From the manufacturer's certificate.</span></label>
+</div>

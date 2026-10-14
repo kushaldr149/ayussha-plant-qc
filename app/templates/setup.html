@@ -18,17 +18,17 @@
 </div>
 
 <div class="panel" id="materials">
-  <div class="panel-head"><h2>Materials</h2>{% if can("setup.write") %}<a class="btn" href="/setup/materials/new">Add material</a>{% endif %}</div>
+  <div class="panel-head"><h2>Materials</h2>{% if can("setup.write") %}<div class="row"><a class="btn primary" href="/setup/standard-materials">Add standard materials</a><a class="btn" href="/setup/materials/new">Add material</a></div>{% endif %}</div>
   <div class="tablewrap">
   <table class="data">
     <thead><tr><th>Material</th><th>Category</th><th>Usual supplier</th><th class="num">Parameters</th><th>Status</th></tr></thead>
     <tbody>
     {% for m in materials %}
       <tr><td>{% if can("setup.write") %}<a class="rowlink" href="/setup/materials/{{ m.id }}">{{ m.name }}</a>{% else %}{{ m.name }}{% endif %}{% if m.notes %}<div class="muted small">{{ m.notes }}</div>{% endif %}</td>
-        <td>{{ m.category }}</td><td>{{ m.supplier or "—" }}</td><td class="num">{{ m.parameters|selectattr("active")|list|length }}{% if can("setup.write") and m.category in ["Coarse aggregate", "Fine aggregate"] %}<div><a class="small" href="/setup/materials/{{ m.id }}/is383">IS 383 set</a></div>{% endif %}</td>
+        <td>{{ m.category }}</td><td>{{ m.supplier or "—" }}</td><td class="num">{{ m.parameters|selectattr("active")|list|length }}{% if can("setup.write") and m.category in ["Coarse aggregate", "Fine aggregate"] %}<div><a class="small" href="/setup/materials/{{ m.id }}/is383">IS 383 set</a></div>{% elif can("setup.write") and m.category == "Cement" %}<div><a class="small" href="/setup/materials/{{ m.id }}/cement">Cement IS set</a></div>{% endif %}</td>
         <td>{% if m.active %}<span class="chip pass">Active</span>{% else %}<span class="chip info">Inactive</span>{% endif %}</td></tr>
     {% else %}
-      <tr><td colspan="5" class="empty"><strong>No materials yet</strong>Add each material you receive: each cement, SCM, aggregate fraction, coating material and admixture.</td></tr>
+      <tr><td colspan="5" class="empty"><strong>No materials yet</strong>Add each material you receive: each cement, SCM, aggregate fraction, coating material and admixture. "Add standard materials" sets up 20 mm down, 12.5 mm down, M-sand, OPC-43, OPC-53, PPC and PSC with their IS test sets.</td></tr>
     {% endfor %}
     </tbody>
   </table>
