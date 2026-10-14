@@ -3,19 +3,24 @@
 {% block title %}Plant process{% endblock %}
 {% block content %}
 <div class="toolbar">
-  <div><h1>Plant process</h1><p class="muted">Coating of coarse aggregate, grinding of cementitious materials, packing of jumbo bags, fibre bags and admixture barrels per order, and the mixing record at site. Every bag traces back to the lots in it.</p></div>
+  <div><h1>Plant process</h1><p class="muted">Coating of coarse aggregate and grinding of cementitious materials (separate batches), packing of jumbo bags, fibre bags and admixture barrels per order, and the mixing record at site. Every bag traces back to the lots in it.</p></div>
   <div class="row">
     <a class="btn" href="/packs/scan">Scan / find a bag</a>
-    {% if can("process.write") %}<a class="btn" href="/process/coating/new">New coating batch</a><a class="btn" href="/process/grinding/new">New grinding batch</a><a class="btn primary" href="/packs/new">Pack a bag</a>{% endif %}
+    {% if can("process.write") %}<a class="btn primary" href="/packs/new">Pack a bag</a>{% endif %}
   </div>
 </div>
 <div class="tiles">
   {% for s in PACK_STATUSES %}<a class="tile {% if s == 'Rejected' and counts.get(s) %}bad{% endif %}" href="/packs?status={{ s|urlencode }}"><span class="k">Bags {{ s|lower }}</span><span class="v">{{ counts.get(s, 0) }}</span></a>{% endfor %}
-  <a class="tile {% if on_hold %}warn{% endif %}" href="/process/batches?decision=On+hold"><span class="k">Batches on hold</span><span class="v">{{ on_hold }}</span></a>
+  <a class="tile {% if on_hold.get('coating') %}warn{% endif %}" href="/process/coating?decision=On+hold"><span class="k">Coating batches on hold</span><span class="v">{{ on_hold.get('coating', 0) }}</span></a>
+  <a class="tile {% if on_hold.get('grinding') %}warn{% endif %}" href="/process/grinding?decision=On+hold"><span class="k">Grinding batches on hold</span><span class="v">{{ on_hold.get('grinding', 0) }}</span></a>
 </div>
 <div class="panel">
-  <div class="panel-head"><h2>Coating and grinding batches</h2><a class="small" href="/process/batches">All batches</a></div>
-  {% include "_batch_rows.html" %}
+  <div class="panel-head"><h2>Coating batches · coarse aggregate</h2><div class="row">{% if can("process.write") %}<a class="btn" href="/process/coating/new">New coating batch</a>{% endif %}<a class="small" href="/process/coating">All coating batches</a></div></div>
+  {% set batches = coating %}{% include "_coating_rows.html" %}
+</div>
+<div class="panel">
+  <div class="panel-head"><h2>Grinding batches · cementitious materials</h2><div class="row">{% if can("process.write") %}<a class="btn" href="/process/grinding/new">New grinding batch</a>{% endif %}<a class="small" href="/process/grinding">All grinding batches</a></div></div>
+  {% set batches = grinding %}{% include "_grinding_rows.html" %}
 </div>
 <div class="panel">
   <div class="panel-head"><h2>Bags and barrels</h2><a class="small" href="/packs">All bags</a></div>

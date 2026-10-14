@@ -1,14 +1,16 @@
 {% extends "base.html" %}
 {% from "_macros.html" import dec_chip %}
-{% block title %}Coating and grinding batches{% endblock %}
+{% set title = "Coating batches · coarse aggregate" if kind == "coating" else "Grinding batches · cementitious materials" %}
+{% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/process">Plant process</a></p><h1>Coating and grinding batches</h1></div>
-  <div class="row">{% if can("process.write") %}<a class="btn" href="/process/coating/new">New coating batch</a><a class="btn" href="/process/grinding/new">New grinding batch</a>{% endif %}</div></div>
-<form class="filters" method="get" action="/process/batches" data-autosubmit>
-  <label>Process<select name="kind" id="f-kind"><option value="">All</option>{% for k, label in PROCESS_KINDS.items() %}<option value="{{ k }}" {% if f.kind == k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/process">Plant process</a></p><h1>{{ title }}</h1>
+  <p class="muted">{% if kind == "coating" %}Coarse aggregate lots coated with microsilica, Alccofine or another coating material.{% else %}Cement and SCM lots ground in the grinding mill, one material per batch.{% endif %}</p></div>
+  <div class="row"><a class="btn" href="/process/{{ 'grinding' if kind == 'coating' else 'coating' }}">{{ "Grinding batches" if kind == "coating" else "Coating batches" }}</a>
+    {% if can("process.write") %}<a class="btn primary" href="/process/{{ kind }}/new">New {{ PROCESS_KINDS[kind]|lower }} batch</a>{% endif %}</div></div>
+<form class="filters" method="get" action="/process/{{ kind }}" data-autosubmit>
   <label>Decision<select name="decision" id="f-dec"><option value="">All</option>{% for d in DECISIONS %}<option {% if f.decision == d %}selected{% endif %}>{{ d }}</option>{% endfor %}</select></label>
   <label>Search<input type="search" name="q" id="f-q" value="{{ f.get('q', '') }}" placeholder="Batch no., material"></label>
-  <button class="btn" type="submit">Apply</button>{% if f %}<a class="btn ghost" href="/process/batches">Clear</a>{% endif %}
+  <button class="btn" type="submit">Apply</button>{% if f %}<a class="btn ghost" href="/process/{{ kind }}">Clear</a>{% endif %}
 </form>
-{% set batches = rows %}{% include "_batch_rows.html" %}
+{% set batches = rows %}{% include "_coating_rows.html" if kind == "coating" else "_grinding_rows.html" %}
 {% endblock %}

@@ -2,8 +2,8 @@
 {% from "_macros.html" import dec_chip, res_chip, pack_chip %}
 {% block title %}{{ b.batch_no }}{% endblock %}
 {% block content %}
-<div class="toolbar"><div><p class="muted mono" style="margin:0"><a href="/process">Plant process</a> · {{ b.batch_no }}</p><h1>{{ PROCESS_KINDS[b.kind] }}: {{ b.output_material_name }}</h1></div>
-  <div class="row"><a class="btn ghost" href="/process/batches">All batches</a></div></div>
+<div class="toolbar"><div><p class="muted mono" style="margin:0"><a href="/process">Plant process</a> · <a href="/process/{{ b.kind }}">{{ PROCESS_KINDS[b.kind] }} batches</a> · {{ b.batch_no }}</p><h1>{{ PROCESS_KINDS[b.kind] }}: {{ b.output_material_name }}</h1></div>
+  <div class="row"><a class="btn ghost" href="/process/{{ b.kind }}">All {{ PROCESS_KINDS[b.kind]|lower }} batches</a></div></div>
 <div class="grid2">
   <div class="panel"><dl class="kv">
     <dt>Batch date</dt><dd>{{ b.batch_date|d }}{% if b.shift %} · {{ b.shift }}{% endif %}</dd>

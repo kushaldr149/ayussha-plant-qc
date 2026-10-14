@@ -1,0 +1,10 @@
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Batch / output lot</th><th>Date</th><th>Material ground (lots)</th><th>Ground output</th><th class="num">Blaine m²/kg</th><th class="num">Residue on 45 micron</th><th>Decision</th></tr></thead>
+  <tbody>{% for b in batches %}
+    <tr><td class="mono"><a class="rowlink" href="/process/batches/{{ b.id }}">{{ b.batch_no }}</a></td><td class="nowrap">{{ b.batch_date|d }}</td>
+      <td class="small">{% for i in b.inputs %}{{ i.material_name }} · {{ i.lot_no or "—" }} · {{ i.qty|num }} {{ i.unit }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+      <td>{{ b.output_material_name }}{% if b.output_qty is not none %}<div class="muted small mono">{{ b.output_qty|num }} {{ b.output_unit }}</div>{% endif %}</td>
+      <td class="num mono">{{ b.blaine_m2kg|num if b.blaine_m2kg is not none else "—" }}</td>
+      <td class="num mono">{{ (b.residue45_pct|num ~ " %") if b.residue45_pct is not none else "—" }}</td>
+      <td>{{ dec_chip(b.decision) }}{% if b.lot_issue %}<div style="margin-top:4px"><span class="chip hold">Lot not accepted</span></div>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="7" class="empty">No grinding batches yet.</td></tr>{% endfor %}</tbody></table></div>

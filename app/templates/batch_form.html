@@ -2,7 +2,7 @@
 {% block title %}New {{ o.label|lower }} batch{% endblock %}
 {% block content %}
 {% set v = form if form else {} %}
-<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/process">Plant process</a></p><h1>New {{ o.label|lower }} batch</h1>
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/process">Plant process</a> · <a href="/process/{{ o.kind }}">{{ o.label }} batches</a></p><h1>New {{ o.label|lower }} batch · {{ "coarse aggregate" if o.kind == "coating" else "cementitious material" }}</h1>
 <p class="muted">{% if o.kind == "coating" %}Record the coarse aggregate lots coated and the coating material lots used (microsilica, Alccofine…). The coating dosage is calculated from the masses.{% else %}Record the lots of one material fed to the grinding mill and the ground output. Each material is ground separately.{% endif %} The output gets its own lot number and stays on hold until QC makes a decision. Lots that are not accepted need a remark.</p></div></div>
 <form class="panel stack" method="post" action="/process/{{ o.kind }}/new">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
@@ -36,6 +36,6 @@
     <p class="small muted" style="margin:6px 0 0">Lots come from Material QC (inward tests). Empty lines are ignored. Balance is the stock left in that lot.</p>
   </div>
   <label class="f"><span>Remarks</span><textarea name="remarks" id="b_rem" rows="2">{{ v.get('remarks', '') }}</textarea></label>
-  <div class="actions"><a class="btn" href="/process">Cancel</a><button class="btn primary" type="submit">Save batch</button></div>
+  <div class="actions"><a class="btn" href="/process/{{ o.kind }}">Cancel</a><button class="btn primary" type="submit">Save batch</button></div>
 </form>
 {% endblock %}

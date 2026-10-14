@@ -248,7 +248,14 @@ def test_plant_flow(admin):
         assert p.status == "Packed" and p.dispatch_id is None
 
     # ---- pages render
-    for url in ("/process", "/process/batches", "/packs", f"/packs?order={oid}", "/packs/scan",
+    with SessionLocal() as db:
+        coat_no, grind_no = db.get(ProcessBatch, coat_id).batch_no, db.get(ProcessBatch, grind_id).batch_no
+    coat_page, grind_page = admin.get("/process/coating").text, admin.get("/process/grinding").text
+    assert coat_no in coat_page and grind_no not in coat_page
+    assert grind_no in grind_page and coat_no not in grind_page
+    assert admin.get("/process/batches?kind=grinding", follow_redirects=False).headers["location"] == "/process/grinding"
+    assert admin.get("/process/mixing").status_code == 404
+    for url in ("/process", "/process/coating", "/process/grinding", "/packs", f"/packs?order={oid}", "/packs/scan",
                 f"/process/batches/{grind_id}", f"/orders/{oid}"):
         assert admin.get(url).status_code == 200, url
 

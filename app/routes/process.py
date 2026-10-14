@@ -25,25 +25,35 @@ PACK_LINES = 8
 
 @router.get("/process")
 def process_home(request: Request, db: Session = Depends(get_db), user: User = Depends(require("view"))):
-    batches = db.scalars(select(ProcessBatch).order_by(ProcessBatch.batch_date.desc(), ProcessBatch.id.desc()).limit(15)).all()
+    def latest(kind):
+        return db.scalars(select(ProcessBatch).where(ProcessBatch.kind == kind).options(selectinload(ProcessBatch.inputs))
+                          .order_by(ProcessBatch.batch_date.desc(), ProcessBatch.id.desc()).limit(10)).all()
     packs = db.scalars(select(Pack).options(selectinload(Pack.order).selectinload(Order.customer))
                        .order_by(Pack.pack_date.desc(), Pack.id.desc()).limit(15)).all()
     mixes = db.scalars(select(SiteMix).options(selectinload(SiteMix.dispatch).selectinload(Dispatch.order))
                        .order_by(SiteMix.mix_date.desc(), SiteMix.id.desc()).limit(10)).all()
     counts = dict(db.execute(select(Pack.status, func.count(Pack.id)).group_by(Pack.status)).all())
-    on_hold = db.scalar(select(func.count(ProcessBatch.id)).where(ProcessBatch.decision == "On hold")) or 0
-    return render(request, db, user, "process_home.html", batches=batches, packs=packs, mixes=mixes, counts=counts,
-                  on_hold=on_hold, PACK_STATUSES=PACK_STATUSES, PROCESS_KINDS=PROCESS_KINDS)
+    on_hold = dict(db.execute(select(ProcessBatch.kind, func.count(ProcessBatch.id))
+                              .where(ProcessBatch.decision == "On hold").group_by(ProcessBatch.kind)).all())
+    return render(request, db, user, "process_home.html", coating=latest("coating"), grinding=latest("grinding"),
+                  packs=packs, mixes=mixes, counts=counts, on_hold=on_hold, PACK_STATUSES=PACK_STATUSES,
+                  PROCESS_KINDS=PROCESS_KINDS)
 
 
 # ================================================================ coating and grinding
 
 @router.get("/process/batches")
-def batch_list(request: Request, db: Session = Depends(get_db), user: User = Depends(require("view"))):
+def batch_list_old(request: Request):
+    kind = request.query_params.get("kind")
+    return redirect(f"/process/{kind if kind in PROCESS_KINDS else 'coating'}")
+
+
+@router.get("/process/{kind}")
+def batch_list(kind: str, request: Request, db: Session = Depends(get_db), user: User = Depends(require("view"))):
+    if kind not in PROCESS_KINDS:
+        raise HTTPException(404, "Not found.")
     f = dict(request.query_params)
-    stmt = select(ProcessBatch)
-    if f.get("kind") in PROCESS_KINDS:
-        stmt = stmt.where(ProcessBatch.kind == f["kind"])
+    stmt = select(ProcessBatch).where(ProcessBatch.kind == kind)
     if f.get("decision") in DECISIONS:
         stmt = stmt.where(ProcessBatch.decision == f["decision"])
     if f.get("q"):
@@ -52,7 +62,7 @@ def batch_list(request: Request, db: Session = Depends(get_db), user: User = Dep
                               func.lower(ProcessBatch.output_material_name).like(like)))
     rows = db.scalars(stmt.options(selectinload(ProcessBatch.inputs))
                       .order_by(ProcessBatch.batch_date.desc(), ProcessBatch.id.desc()).limit(300)).all()
-    return render(request, db, user, "batch_list.html", rows=rows, f=f, PROCESS_KINDS=PROCESS_KINDS)
+    return render(request, db, user, "batch_list.html", rows=rows, f=f, kind=kind, PROCESS_KINDS=PROCESS_KINDS)
 
 
 @router.get("/process/{kind}/new")
