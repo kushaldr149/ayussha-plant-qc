@@ -29,5 +29,6 @@ if "%HOST%"=="127.0.0.1" (
 )
 echo Close this window or press Ctrl+C to stop the app.
 echo.
-".venv\Scripts\python.exe" -m uvicorn app.main:app --host %HOST% --port %PORT% --no-use-colors
+rem app\run.py starts uvicorn and also writes this window's text to data\logs\start.log
+".venv\Scripts\python.exe" -m app.run
 pause
