@@ -29,6 +29,10 @@ def bootstrap() -> None:
     init_db()
     with SessionLocal() as db:
         get_settings(db)
+        from .services import apply_settings_file
+        msg = apply_settings_file(db, config.DATA_DIR)
+        if msg:
+            log.warning(msg)
         if (db.scalar(select(func.count(User.id))) or 0) == 0:
             password = config.INITIAL_ADMIN_PASSWORD
             if not password:

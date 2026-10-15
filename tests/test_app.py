@@ -316,3 +316,29 @@ def test_item_status_per_category():
     assert logic.item_status([(5.0, 2), (4.0, None)])[0] == "over"
     assert logic.item_status([(None, 2)]) == ("nodata", None)
     assert logic.single_tolerance([2, 2]) == 2 and logic.single_tolerance([2, 3]) is None
+
+
+def test_settings_file_applied_once(tmp_path):
+    import json
+    from app import services
+    from app.models import TOLERANCE_CATEGORIES as TC
+    with SessionLocal() as db:
+        s = services.get_settings(db)
+        keep = {k: getattr(s, k) for k in ("company_name", "plant_name", "plant_address", "tolerance_pct",
+                                            "category_tolerances", "product_lines", "shifts")}
+        assert services.apply_settings_file(db, tmp_path) is None
+        (tmp_path / "plant-settings.json").write_text(json.dumps({"plant_name": "X", "tolerances": {"Cement": -1}}))
+        assert "not applied" in services.apply_settings_file(db, tmp_path)
+        assert list(tmp_path.glob("plant-settings.rejected-*.json"))
+        (tmp_path / "plant-settings.json").write_text(json.dumps({
+            "company_name": "Co", "plant_name": "AYUSSHA WEST INDIA PLANT", "plant_address": "no. 12",
+            "product_lines": ["M60", "M80", " "], "tolerances": {c: 3 for c in TC}}), encoding="utf-8")
+        assert "applied" in services.apply_settings_file(db, tmp_path)
+        assert not (tmp_path / "plant-settings.json").exists() and list(tmp_path.glob("plant-settings.applied-*.json"))
+        s = services.get_settings(db)
+        assert s.plant_name == "AYUSSHA WEST INDIA PLANT" and s.product_line_list == ["M60", "M80"]
+        assert all(s.tolerance_for(c) == 3 for c in TC) and s.tolerance_for("Packaging") is None
+        assert db.scalars(select(AuditLog).where(AuditLog.entity == "settings").order_by(AuditLog.id.desc())).first().username == "system"
+        for k, v in keep.items():
+            setattr(s, k, v)
+        db.commit()

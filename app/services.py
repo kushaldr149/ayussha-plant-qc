@@ -369,3 +369,61 @@ def review_data(db: Session, date_from: date, date_to: date, limit: int) -> dict
 
 def iso_now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+# ---------------------------------------------------------------- plant settings from a file at start-up
+
+SETTINGS_FILE = "plant-settings.json"
+
+
+def apply_settings_file(db: Session, data_dir) -> str | None:
+    """If DATA_DIR/plant-settings.json exists, apply it to the plant settings, record it in the audit trail and
+    rename it to plant-settings.applied-<time>.json so it is applied once. Returns a message, or None if no file.
+
+    Keys (all optional): company_name, plant_name, plant_address, product_lines (list), shifts (list),
+    tolerances ({material category: ± % of planned}). A file with errors is renamed to .rejected-<time>.json."""
+    import json
+    from datetime import datetime
+    from pathlib import Path
+
+    from .models import TOLERANCE_CATEGORIES
+    path = Path(data_dir) / SETTINGS_FILE
+    if not path.exists():
+        return None
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("the file must hold one JSON object")
+        unknown = set(raw) - {"company_name", "plant_name", "plant_address", "product_lines", "shifts", "tolerances"}
+        if unknown:
+            raise ValueError("unknown keys: " + ", ".join(sorted(unknown)))
+        tols = raw.get("tolerances")
+        if tols is not None:
+            bad = [c for c in tols if c not in TOLERANCE_CATEGORIES]
+            if bad:
+                raise ValueError("unknown material categories: " + ", ".join(bad))
+            if any(not isinstance(v, (int, float)) or v < 0 for v in tols.values()):
+                raise ValueError("tolerances must be numbers of zero or more")
+        for k in ("product_lines", "shifts"):
+            if k in raw and not (isinstance(raw[k], list) and all(isinstance(x, str) for x in raw[k])):
+                raise ValueError(f"{k} must be a list of text")
+    except ValueError as e:
+        path.rename(path.with_name(f"plant-settings.rejected-{stamp}.json"))
+        return f"{SETTINGS_FILE} was not applied: {e}"
+    s = get_settings(db)
+    before = {k: getattr(s, k) for k in ("company_name", "plant_name", "plant_address", "tolerance_pct",
+                                          "category_tolerances", "product_lines", "shifts")}
+    for k in ("company_name", "plant_name", "plant_address"):
+        if k in raw:
+            setattr(s, k, str(raw[k]).strip())
+    for k in ("product_lines", "shifts"):
+        if k in raw:
+            setattr(s, k, "\n".join(x.strip() for x in raw[k] if x.strip()))
+    if tols is not None:
+        s.category_tolerances = json.dumps({c: float(v) for c, v in tols.items()})
+        s.tolerance_pct = None
+    audit.record(db, None, "update", "settings", "plant", {"before": before, "source": SETTINGS_FILE})
+    db.commit()
+    path.rename(path.with_name(f"plant-settings.applied-{stamp}.json"))
+    return f"Plant settings applied from {SETTINGS_FILE}."
