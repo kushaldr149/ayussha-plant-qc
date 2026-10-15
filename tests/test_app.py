@@ -31,13 +31,27 @@ def test_csrf_is_enforced(admin):
 
 def test_setup_settings(admin):
     admin.get("/setup/settings")
-    r = admin.post("/setup/settings", {"company_name": "Test Co", "plant_name": "Test plant", "tolerance_pct": "abc"})
+    from app.models import TOLERANCE_CATEGORIES as TC
+    page = admin.get("/setup/settings").text
+    assert all(c in page for c in TC) and "Packaging" not in page.split("Batching tolerance by material type")[1]
+    r = admin.post("/setup/settings", {"company_name": "Test Co", "plant_name": "Test plant", "tol_0": "abc"})
     assert r.status_code == 400 and "must be a number" in r.text
-    r = admin.post("/setup/settings", {"company_name": "Test Co", "plant_name": "Test plant", "tolerance_pct": "2",
+    tols = {f"tol_{i}": "2" for i, c in enumerate(TC) if c != "Other"}
+    tols[f"tol_{TC.index('Coarse aggregate')}"] = "3"
+    r = admin.post("/setup/settings", {"company_name": "Test Co", "plant_name": "Test plant", **tols,
                                        "product_lines": "Line A\nLine B\n\n", "shifts": "S1\nS2"})
     assert r.status_code == 303
     page = admin.get("/setup").text
-    assert "Test plant" in page and "Line A, Line B" in page and "± 2%" in page
+    assert "Test plant" in page and "Line A, Line B" in page and "Cement: ± 2%" in page
+    assert "Coarse aggregate: ± 3%" in page and "Other: ±" not in page
+    from app.services import get_settings
+    with SessionLocal() as db:
+        s = get_settings(db)
+        assert s.tolerance_for("Coarse aggregate") == 3 and s.tolerance_for("Other") is None and s.tolerance_pct is None
+    # put back the single 2 % used by later tests
+    admin.get("/setup/settings")
+    admin.post("/setup/settings", {"company_name": "Test Co", "plant_name": "Test plant", "product_lines": "Line A\nLine B",
+                                   "shifts": "S1\nS2", **{f"tol_{i}": "2" for i in range(len(TC))}})
 
 
 def test_materials_and_parameters(admin):
@@ -292,3 +306,13 @@ def test_lockout(client):
 def test_unknown_page_html(admin):
     r = admin.get("/does-not-exist")
     assert r.status_code == 404 and "Not found" in r.text
+
+
+def test_item_status_per_category():
+    from app import logic
+    assert logic.item_status([(1.5, 2), (2.5, 3)]) == ("ok", 2.5)
+    assert logic.item_status([(2.5, 2), (1.0, 3)]) == ("over", 2.5)       # cement-like line over its own ±2
+    assert logic.item_status([(1.0, 2), (4.0, None)]) == ("notol", 4.0)   # a compared line with no tolerance
+    assert logic.item_status([(5.0, 2), (4.0, None)])[0] == "over"
+    assert logic.item_status([(None, 2)]) == ("nodata", None)
+    assert logic.single_tolerance([2, 2]) == 2 and logic.single_tolerance([2, 3]) is None

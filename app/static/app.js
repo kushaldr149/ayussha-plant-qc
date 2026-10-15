@@ -273,7 +273,10 @@
       const dev = planned && actual != null && !Number.isNaN(planned) && !Number.isNaN(actual) ? ((actual - planned) / planned) * 100 : null;
       const out = $(".c-dev", row);
       out.textContent = dev == null ? "—" : (dev > 0 ? "+" : "") + dev.toFixed(2) + "%";
-      out.classList.toggle("bad", dev != null && P.tolerance != null && Math.abs(dev) > P.tolerance);
+      const m = P.materials.find((x) => String(x.id) === String($('[data-f="material_id"]', row).value));
+      const tol = m && m.tol != null ? m.tol : null;
+      out.classList.toggle("bad", dev != null && tol != null && Math.abs(dev) > tol);
+      out.title = tol != null ? `Tolerance ±${tol} %` : "No batching tolerance set for this material's category";
       const mid = $('[data-f="material_id"]', row).value, info = lotInfo(mid, $('[data-f="lot_no"]', row).value), note = $(".c-note", row);
       if (!info) note.innerHTML = "";
       else if (info.decision === "none") note.innerHTML = '<span class="note-warn">No QC record found for this lot.</span>';

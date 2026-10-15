@@ -97,7 +97,9 @@ def _setup_data():
         o2 = Order(order_no="SO-P-2", order_date=date.today(), customer_id=cust.id, status="Open", created_by_id=uid)
         db.add_all([o1, o2])
         s = db.get(PlantSettings, 1) or PlantSettings(id=1)
-        s.tolerance_pct = 2.0
+        import json as _json
+        from app.models import TOLERANCE_CATEGORIES
+        s.category_tolerances = _json.dumps({c: 2.0 for c in TOLERANCE_CATEGORIES})
         db.add(s)
         db.commit()
         return {k: v.id for k, v in m.items()}, lots, o1.id, o2.id

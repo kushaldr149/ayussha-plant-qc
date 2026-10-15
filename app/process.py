@@ -282,7 +282,10 @@ def save_packs(db: Session, user: User, form) -> list[Pack]:
         raise ValidationError(errors)
 
     planned = planned_for(order, kind)
-    tol = get_settings(db).tolerance_pct
+    settings = get_settings(db)
+    tol_of = {mid: settings.tolerance_for(m.category) for mid in planned if (m := db.get(Material, mid))}
+    for mat, *_ in rows:
+        tol_of.setdefault(mat.id, settings.tolerance_for(mat.category))
     items, devs = [], []
     by_mat: dict[int, float] = {}
     for mat, lot_no, decision, test_id, batch_id, actual, unit in rows:
@@ -292,16 +295,18 @@ def save_packs(db: Session, user: User, form) -> list[Pack]:
         p = planned.get(mat.id)
         plan_q = logic.convert(p[0], p[1], unit) if p else None
         items.append(dict(material_id=mat.id, material_name=mat.name, lot_no=lot_no, lot_decision=decision,
-                          lot_test_id=test_id, batch_id=batch_id, planned=plan_q, actual=actual, unit=unit, dev_pct=None))
+                          lot_test_id=test_id, batch_id=batch_id, planned=plan_q, actual=actual, unit=unit, dev_pct=None,
+                          tolerance_pct=tol_of.get(mat.id)))
     # Deviation per material (a material may come from two lots): total packed vs planned.
     for mid, (q, u) in planned.items():
         dev = logic.deviation_pct(q, by_mat.get(mid, 0.0))
-        devs.append(dev)
+        devs.append((dev, tol_of.get(mid)))
         for it in items:
             if it["material_id"] == mid:
                 it["dev_pct"] = dev
     missing = [mid for mid in planned if by_mat.get(mid, 0.0) == 0.0]
-    status, largest = logic.production_status(devs, tol)
+    status, largest = logic.item_status(devs)
+    tol = logic.single_tolerance(t for _, t in devs) if devs else None
     lot_issue = any(r[2] != "Accepted" for r in rows)
     net = sum(logic.convert(r[5], r[6], "kg") or 0.0 for r in rows if logic.unit_kind(r[6]) == "mass") or None
     if not remarks:
@@ -496,7 +501,8 @@ def review_data(db: Session, date_from, date_to, limit: int) -> dict:
                               "lot_decision": it.lot_decision or "no QC record",
                               "from_batch": bnos.get(it.batch_id), "batch_decision": bdec.get(bnos.get(it.batch_id)),
                               "planned": _num(it.planned), "actual": it.actual, "unit": it.unit,
-                              "deviation_pct": _num(it.dev_pct)} for it in p.items]}
+                              "deviation_pct": _num(it.dev_pct), "tolerance_pct": it.tolerance_pct}
+                             for it in p.items]}
 
     mixes = db.scalars(select(SiteMix).where(SiteMix.mix_date >= date_from, SiteMix.mix_date <= date_to)
                        .options(selectinload(SiteMix.packs).selectinload(Pack.items),

@@ -16,7 +16,7 @@
     <dt>Mix design</dt><dd>{{ p.recipe_name or "—" }}</dd>
     <dt>Packed</dt><dd>{{ p.pack_date|d }} <span class="muted small">by {{ p.created_by.display if p.created_by else "—" }}</span></dd>
     <dt>Net / gross</dt><dd class="mono">{{ (p.net_kg|num ~ " kg") if p.net_kg is not none else "—" }} / {{ (p.gross_kg|num ~ " kg") if p.gross_kg is not none else "—" }}</dd>
-    <dt>Batching</dt><dd>{{ prod_chip(p.batching_status) }}{% if p.max_abs_dev_pct is not none %} <span class="muted small">largest deviation {{ "%.2f"|format(p.max_abs_dev_pct) }} %{% if p.tolerance_pct is not none %}, tolerance ±{{ p.tolerance_pct|num }} %{% endif %}</span>{% endif %}</dd>
+    <dt>Batching</dt><dd>{{ prod_chip(p.batching_status) }}{% if p.max_abs_dev_pct is not none %} <span class="muted small">largest deviation {{ "%.2f"|format(p.max_abs_dev_pct) }} %{% if p.tolerance_pct is not none %}, tolerance ±{{ p.tolerance_pct|num }} %{% elif p.items|selectattr("tolerance_pct")|list %}, tolerance per material type{% endif %}</span>{% endif %}</dd>
     {% if p.dispatch %}<dt>Dispatch</dt><dd><a class="mono" href="/dispatch/{{ p.dispatch.id }}">{{ p.dispatch.dispatch_no }}</a> · {{ p.dispatch.dispatch_date|d }}</dd>{% endif %}
     {% if p.site_mix %}<dt>Mixed at site</dt><dd><a class="mono" href="/site-mix/{{ p.site_mix.id }}">{{ p.site_mix.mix_no }}</a> · {{ p.site_mix.mix_date|d }}</dd>{% endif %}
     {% if p.remarks %}<dt>Remarks</dt><dd style="white-space:pre-wrap">{{ p.remarks }}</dd>{% endif %}
@@ -36,7 +36,7 @@
 <div class="panel">
   <h2 style="margin-bottom:8px">Contents and lot traceability</h2>
   <div class="tablewrap"><table class="data">
-    <thead><tr><th>Material</th><th>Lot</th><th>Lot source</th><th>Lot decision at packing</th><th class="num">Planned</th><th class="num">Packed</th><th class="num">Deviation</th></tr></thead>
+    <thead><tr><th>Material</th><th>Lot</th><th>Lot source</th><th>Lot decision at packing</th><th class="num">Planned</th><th class="num">Packed</th><th class="num">Deviation</th><th class="num">Tolerance</th></tr></thead>
     <tbody>{% for it in p.items %}
       <tr><td>{{ it.material_name }}</td>
         <td class="mono">{{ it.lot_no or "—" }}</td>
@@ -45,7 +45,9 @@
         <td>{{ dec_chip(it.lot_decision) }}</td>
         <td class="num mono">{{ (it.planned|num ~ " " ~ it.unit) if it.planned is not none else "—" }}</td>
         <td class="num mono">{{ it.actual|num }} {{ it.unit }}</td>
-        <td class="num mono">{{ ("%+.2f"|format(it.dev_pct) ~ " %") if it.dev_pct is not none else "—" }}</td></tr>
+        {% set itol = it.tolerance_pct if it.tolerance_pct is not none else p.tolerance_pct %}
+        <td class="num mono {{ 'bad' if it.dev_pct is not none and itol is not none and (it.dev_pct|abs) > itol }}">{{ ("%+.2f"|format(it.dev_pct) ~ " %") if it.dev_pct is not none else "—" }}</td>
+        <td class="num mono">{% if itol is not none %}± {{ itol|num }} %{% else %}Not set{% endif %}</td></tr>
     {% endfor %}</tbody></table></div>
 </div>
 {% endblock %}

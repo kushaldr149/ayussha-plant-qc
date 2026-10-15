@@ -8,12 +8,19 @@
   <div class="fgrid">
     <label class="f wide"><span>Company name</span><input name="company_name" id="s_company" value="{{ v.get('company_name', settings.company_name) }}"></label>
     <label class="f"><span>Plant name</span><input name="plant_name" id="s_plant" value="{{ v.get('plant_name', settings.plant_name) }}"></label>
-    <label class="f"><span>Batching tolerance (± % of planned weight)</span><input name="tolerance_pct" id="s_tol" inputmode="decimal" class="mono" value="{{ v.get('tolerance_pct', settings.tolerance_pct if settings.tolerance_pct is not none else '') }}">
-      <span class="hint">Leave empty until it is fixed from your specification.</span></label>
     <label class="f wide"><span>Plant address</span><textarea name="plant_address" id="s_addr" rows="2">{{ v.get('plant_address', settings.plant_address) }}</textarea></label>
     <label class="f"><span>Product lines (one per line)</span><textarea name="product_lines" id="s_lines" rows="4">{{ v.get('product_lines', settings.product_lines) }}</textarea></label>
     <label class="f"><span>Shifts (one per line)</span><textarea name="shifts" id="s_shifts" rows="4">{{ v.get('shifts', settings.shifts) }}</textarea></label>
   </div>
+  <h2 style="margin:6px 0 0">Batching tolerance by material type</h2>
+  <p class="muted small" style="margin:0">± % of the planned weight in the mix design. Each bag line and production component is checked against the tolerance of its material's category (the category is set on each material in Setup). Leave a category empty if you do not batch it or the figure is not fixed yet; its deviations are shown but not flagged.</p>
+  {% set tm = settings.tolerance_map if settings.per_category else {} %}
+  <div class="fgrid">
+    {% for c in tol_categories %}{% set key = "tol_" ~ loop.index0 %}
+    <label class="f"><span>{{ c }}</span><input name="{{ key }}" id="s_{{ key }}" inputmode="decimal" class="mono" value="{{ v.get(key, tm.get(c, '') if tm.get(c) is not none else '') }}"></label>
+    {% endfor %}
+  </div>
+  {% if not settings.per_category and settings.tolerance_pct is not none %}<p class="note-warn small" style="margin:0">Currently one tolerance of ± {{ settings.tolerance_pct|num }} % applies to all materials. Saving this form replaces it with the figures above.</p>{% endif %}
   <div class="actions"><a class="btn" href="/setup">Cancel</a><button class="btn primary" type="submit">Save settings</button></div>
 </form>
 {% endblock %}

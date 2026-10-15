@@ -72,13 +72,13 @@ def _form_context(db: Session) -> dict:
     materials = db.scalars(select(Material).where(Material.active.is_(True)).order_by(Material.name)).all()
     recipes = db.scalars(select(Recipe).where(Recipe.active.is_(True)).options(selectinload(Recipe.components))
                          .order_by(Recipe.name)).all()
+    settings = services.get_settings(db)
     payload = {
-        "materials": [{"id": m.id, "name": m.name} for m in materials],
+        "materials": [{"id": m.id, "name": m.name, "tol": settings.tolerance_for(m.category)} for m in materials],
         "lots": services.known_lots(db),
         "recipes": {r.id: {"line": r.product_line, "components": [
             {"material_id": c.material_id, "planned": c.quantity, "unit": c.unit} for c in r.components]}
             for r in recipes},
-        "tolerance": services.get_settings(db).tolerance_pct,
     }
     return {"materials": materials, "recipes": recipes, "payload": payload}
 

@@ -27,26 +27,37 @@ def setup_home(request: Request, db: Session = Depends(get_db), user: User = Dep
 
 # ---------------------------------------------------------------- settings
 
+from ..models import TOLERANCE_CATEGORIES  # noqa: E402
+
+
 @router.get("/settings")
 def settings_page(request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
-    return render(request, db, user, "settings_form.html", form=None)
+    return render(request, db, user, "settings_form.html", form=None, tol_categories=TOLERANCE_CATEGORIES)
 
 
 @router.post("/settings")
 async def settings_save(request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
     form = await request.form()
     errors: list[str] = []
-    tol = services.parse_num(form.get("tolerance_pct"), "Batching tolerance", errors)
-    if tol is not None and tol < 0:
-        errors.append("Batching tolerance must be zero or more.")
+    tols: dict[str, float] = {}
+    for i, cat in enumerate(TOLERANCE_CATEGORIES):
+        t = services.parse_num(form.get(f"tol_{i}"), f"Batching tolerance for {cat}", errors)
+        if t is not None and t < 0:
+            errors.append(f"Batching tolerance for {cat} must be zero or more.")
+        elif t is not None:
+            tols[cat] = t
     if errors:
-        return render(request, db, user, "settings_form.html", status_code=400, errors=errors, form=form)
+        return render(request, db, user, "settings_form.html", status_code=400, errors=errors, form=form,
+                      tol_categories=TOLERANCE_CATEGORIES)
     s = services.get_settings(db)
-    before = {k: getattr(s, k) for k in ("company_name", "plant_name", "plant_address", "tolerance_pct", "product_lines", "shifts")}
+    before = {k: getattr(s, k) for k in ("company_name", "plant_name", "plant_address", "tolerance_pct",
+                                          "category_tolerances", "product_lines", "shifts")}
     s.company_name = str(form.get("company_name", "")).strip()
     s.plant_name = str(form.get("plant_name", "")).strip()
     s.plant_address = str(form.get("plant_address", "")).strip()
-    s.tolerance_pct = tol
+    import json as _json
+    s.category_tolerances = _json.dumps(tols)   # "{}" = per-category mode with nothing set yet
+    s.tolerance_pct = None
     clean = lambda v: "\n".join(x.strip() for x in str(v or "").splitlines() if x.strip())  # noqa: E731
     s.product_lines = clean(form.get("product_lines"))
     s.shifts = clean(form.get("shifts"))

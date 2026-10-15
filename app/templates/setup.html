@@ -11,7 +11,7 @@
   <dl class="kv">
     <dt>Company</dt><dd>{{ settings.company_name or "Not set" }}</dd>
     <dt>Plant</dt><dd>{{ settings.plant_name or "Not set" }}{% if settings.plant_address %}<div class="muted small" style="white-space:pre-wrap">{{ settings.plant_address }}</div>{% endif %}</dd>
-    <dt>Batching tolerance</dt><dd>{% if settings.tolerance_pct is not none %}± {{ settings.tolerance_pct|num }}% of planned weight{% else %}Not set (deviations are shown but not flagged){% endif %}</dd>
+    <dt>Batching tolerance</dt><dd>{% if settings.per_category %}{% set tm = settings.tolerance_map %}{% if tm %}{% for c, t in tm.items() %}{{ c }}: ± {{ t|num }}%{% if not loop.last %}<br>{% endif %}{% endfor %}<div class="muted small">Of planned weight. Other categories: not set (deviations shown but not flagged).</div>{% else %}Not set (deviations are shown but not flagged){% endif %}{% elif settings.tolerance_pct is not none %}± {{ settings.tolerance_pct|num }}% of planned weight, all materials{% else %}Not set (deviations are shown but not flagged){% endif %}</dd>
     <dt>Product lines</dt><dd>{{ settings.product_line_list|join(", ") or "Not set" }}</dd>
     <dt>Shifts</dt><dd>{{ settings.shift_list|join(", ") or "Not set" }}</dd>
   </dl>

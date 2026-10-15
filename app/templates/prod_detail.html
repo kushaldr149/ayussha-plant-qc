@@ -20,7 +20,7 @@
     <dl class="kv">
       <dt>Status</dt><dd>{{ prod_chip(r.status) }}{% if r.lot_issue %} <span class="chip hold">Lot not accepted</span>{% endif %}</dd>
       <dt>Largest deviation</dt><dd class="mono">{% if r.max_abs_dev_pct is not none %}{{ "%.2f"|format(r.max_abs_dev_pct) }}%{% else %}—{% endif %}</dd>
-      <dt>Tolerance at entry</dt><dd>{% if r.tolerance_pct is not none %}± {{ r.tolerance_pct|num }}%{% else %}Not set{% endif %}</dd>
+      <dt>Tolerance at entry</dt><dd>{% if r.tolerance_pct is not none %}± {{ r.tolerance_pct|num }}%{% elif r.components|selectattr("tolerance_pct")|list %}Per material type, see the table{% else %}Not set{% endif %}</dd>
       <dt>Bags filled</dt><dd class="mono">{{ r.bags if r.bags is not none else "—" }}</dd>
       <dt>Target per bag</dt><dd class="mono">{% if r.bag_target_kg is not none %}{{ r.bag_target_kg|num }} kg{% else %}—{% endif %}</dd>
       <dt>Total actual</dt><dd class="mono">{% if r.total_actual_kg is not none %}{{ r.total_actual_kg|num }} kg{% else %}—{% endif %}</dd>
@@ -29,10 +29,11 @@
 </div>
 <div class="tablewrap">
 <table class="data">
-  <thead><tr><th>Material</th><th>Lot</th><th>Lot decision</th><th class="num">Planned</th><th class="num">Actual</th><th class="num">Deviation</th></tr></thead>
+  <thead><tr><th>Material</th><th>Lot</th><th>Lot decision</th><th class="num">Planned</th><th class="num">Actual</th><th class="num">Deviation</th><th class="num">Tolerance</th></tr></thead>
   <tbody>
   {% for c in r.components %}
-    {% set over = c.dev_pct is not none and r.tolerance_pct is not none and (c.dev_pct|abs) > r.tolerance_pct %}
+    {% set ctol = c.tolerance_pct if c.tolerance_pct is not none else r.tolerance_pct %}
+    {% set over = c.dev_pct is not none and ctol is not none and (c.dev_pct|abs) > ctol %}
     <tr>
       <td>{{ c.material_name }}</td>
       <td class="mono">{% if c.lot_test_id %}<a href="/qc/{{ c.lot_test_id }}">{{ c.lot_no }}</a>{% else %}{{ c.lot_no or "—" }}{% endif %}</td>
@@ -40,6 +41,7 @@
       <td class="num mono">{% if c.planned is not none %}{{ c.planned|num }} {{ c.unit }}{% else %}—{% endif %}</td>
       <td class="num mono">{{ c.actual|num }} {{ c.unit }}</td>
       <td class="num mono {{ 'bad' if over }}">{% if c.dev_pct is not none %}{{ "%+.2f"|format(c.dev_pct) }}%{% else %}—{% endif %}</td>
+      <td class="num mono">{% if ctol is not none %}± {{ ctol|num }}%{% else %}Not set{% endif %}</td>
     </tr>
   {% endfor %}
   </tbody>

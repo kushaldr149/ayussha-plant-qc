@@ -244,7 +244,6 @@ def save_production(db: Session, user: User | None, form: dict, source: str = "m
     total_actual = parse_num(form.get("total_actual_kg"), "Total actual weight", errors)
 
     settings = get_settings(db)
-    tolerance = settings.tolerance_pct
     components: list[ProductionComponent] = []
     for i, c in enumerate(form.get("components") or [], start=1):
         mid = c.get("material_id")
@@ -270,14 +269,15 @@ def save_production(db: Session, user: User | None, form: dict, source: str = "m
         components.append(ProductionComponent(
             material_id=material.id, material_name=material.name, lot_no=lot_no, lot_decision=st.decision,
             lot_test_id=st.test_id, planned=planned, actual=actual, unit=(c.get("unit") or "kg").strip(),
-            dev_pct=logic.deviation_pct(planned, actual),
+            dev_pct=logic.deviation_pct(planned, actual), tolerance_pct=settings.tolerance_for(material.category),
         ))
     if not components and not errors:
         errors.append("Add at least one component with a material and actual quantity.")
     if errors:
         raise ValidationError(errors)
 
-    status, largest = logic.production_status((c.dev_pct for c in components), tolerance)
+    status, largest = logic.item_status((c.dev_pct, c.tolerance_pct) for c in components)
+    tolerance = logic.single_tolerance(c.tolerance_pct for c in components)
     record = ProductionRecord(
         record_no=record_no or next_record_no(db, prod_date), prod_date=prod_date,
         shift=(form.get("shift") or "").strip(), product_line=product_line,
@@ -348,7 +348,8 @@ def review_data(db: Session, date_from: date, date_to: date, limit: int) -> dict
     settings = get_settings(db)
     return {
         "period": {"from": date_from.isoformat(), "to": date_to.isoformat()},
-        "batching_tolerance_pct": settings.tolerance_pct,
+        "batching_tolerance_pct_by_material_category": (settings.tolerance_map if settings.per_category
+                                                         else {"all materials": settings.tolerance_pct}),
         "material_tests": [{
             "test_no": t.test_no, "date": t.test_date.isoformat(), "material": t.material_name, "category": t.category,
             "supplier": t.supplier, "lot": t.lot_no, "overall": t.overall, "decision": t.decision, "remarks": t.remarks,

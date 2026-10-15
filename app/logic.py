@@ -67,6 +67,28 @@ def production_status(deviations: Iterable[float | None], tolerance_pct: float |
     return ("over" if largest > tolerance_pct else "ok"), largest
 
 
+def item_status(pairs: Iterable[tuple[float | None, float | None]]) -> tuple[str, float | None]:
+    """(deviation %, tolerance %) per line -> (status, largest absolute deviation).
+
+    over: a line is outside its own tolerance. notol: a compared line has no tolerance set (and none is over).
+    nodata: no planned values to compare. ok: every compared line is within its tolerance."""
+    pairs = [(abs(d), t) for d, t in pairs if d is not None]
+    if not pairs:
+        return "nodata", None
+    largest = max(d for d, _ in pairs)
+    if any(t is not None and d > t for d, t in pairs):
+        return "over", largest
+    if any(t is None for _, t in pairs):
+        return "notol", largest
+    return "ok", largest
+
+
+def single_tolerance(tols: Iterable[float | None]) -> float | None:
+    """The tolerance shared by all lines, or None when lines differ or none is set."""
+    vals = set(tols)
+    return vals.pop() if len(vals) == 1 else None
+
+
 def accept_needs_remark(overall: str, decision: str, remarks: str) -> bool:
     """A lot with out-of-limit results can only be accepted with a written remark."""
     return overall == "fail" and decision == "Accepted" and not (remarks or "").strip()

@@ -42,6 +42,8 @@ CATEGORIES = [
     "Packaging",
     "Other",
 ]
+# Categories offered for a batching tolerance (packaging is not batched).
+TOLERANCE_CATEGORIES = [c for c in CATEGORIES if c != "Packaging"]
 
 UNITS = ["kg", "t", "L", "mL", "bags", "m³"]
 
@@ -73,6 +75,9 @@ class PlantSettings(Base):
     tolerance_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     product_lines: Mapped[str] = mapped_column(Text, default="")  # one per line
     shifts: Mapped[str] = mapped_column(Text, default="")  # one per line
+    # Batching tolerance per material category, JSON {category: ± % of planned}. When saved, it replaces
+    # the single tolerance_pct above (kept for databases set up before per-category tolerances).
+    category_tolerances: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     @property
@@ -82,6 +87,29 @@ class PlantSettings(Base):
     @property
     def shift_list(self) -> list[str]:
         return [x.strip() for x in (self.shifts or "").splitlines() if x.strip()]
+
+    @property
+    def tolerance_map(self) -> dict[str, float]:
+        import json
+        try:
+            raw = json.loads(self.category_tolerances) if self.category_tolerances else None
+        except ValueError:
+            raw = None
+        return {k: float(v) for k, v in (raw or {}).items() if v is not None}
+
+    @property
+    def per_category(self) -> bool:
+        return bool(self.category_tolerances)
+
+    def tolerance_for(self, category: str | None) -> float | None:
+        """± % of planned weight that applies to a material of this category, or None if not set."""
+        if self.per_category:
+            return self.tolerance_map.get(category or "")
+        return self.tolerance_pct
+
+    @property
+    def tolerance_set(self) -> bool:
+        return bool(self.tolerance_map) if self.per_category else self.tolerance_pct is not None
 
 
 class Material(Base):
@@ -244,6 +272,7 @@ class ProductionComponent(Base):
     actual: Mapped[float] = mapped_column(Float)
     unit: Mapped[str] = mapped_column(String(20), default="kg")
     dev_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tolerance_pct: Mapped[float | None] = mapped_column(Float, nullable=True)   # for this material's category
 
     record: Mapped[ProductionRecord] = relationship(back_populates="components")
 
@@ -661,6 +690,7 @@ class PackItem(Base):
     actual: Mapped[float] = mapped_column(Float)
     unit: Mapped[str] = mapped_column(String(20), default="kg")
     dev_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tolerance_pct: Mapped[float | None] = mapped_column(Float, nullable=True)   # for this material's category
 
     pack: Mapped[Pack] = relationship(back_populates="items")
 

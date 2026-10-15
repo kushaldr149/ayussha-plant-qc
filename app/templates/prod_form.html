@@ -18,7 +18,7 @@
     <label class="f wide"><span>Recipe (optional, fills in planned quantities)</span><select name="recipe_id" id="p_rec"><option value="">No recipe</option>{% for r in recipes %}<option value="{{ r.id }}" {% if form.recipe_id == r.id|string %}selected{% endif %}>{{ r.name }}{% if r.product_line %} · {{ r.product_line }}{% endif %}</option>{% endfor %}</select></label>
   </div>
   <div>
-    <div class="panel-head" style="margin-bottom:8px"><h2>Components</h2><span class="muted small">{% if settings.tolerance_pct is not none %}Batching tolerance ± {{ settings.tolerance_pct|num }}%{% else %}Batching tolerance not set in Setup; deviations are shown but not flagged{% endif %}</span></div>
+    <div class="panel-head" style="margin-bottom:8px"><h2>Components</h2><span class="muted small">{% if settings.per_category %}{% if settings.tolerance_map %}Batching tolerance per material type (Setup → Plant settings); hover a deviation to see it{% else %}Batching tolerance not set in Setup; deviations are shown but not flagged{% endif %}{% elif settings.tolerance_pct is not none %}Batching tolerance ± {{ settings.tolerance_pct|num }}%{% else %}Batching tolerance not set in Setup; deviations are shown but not flagged{% endif %}</span></div>
     <div class="comp-head" aria-hidden="true"><span>Material</span><span>Lot no.</span><span>Planned</span><span>Actual</span><span>Unit</span><span>Deviation</span></div>
     <div class="comps" id="p_comps"></div>
     <div style="margin-top:10px"><button type="button" class="btn" id="p_add">Add component</button></div>

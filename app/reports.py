@@ -201,7 +201,9 @@ def batch_certificate_pdf(record: ProductionRecord, settings: PlantSettings, tes
         ("Bags filled", _num(record.bags, 0) if record.bags is not None else "—"),
         ("Target weight per bag", f"{_num(record.bag_target_kg)} kg" if record.bag_target_kg is not None else "—"),
         ("Total actual weight", f"{_num(record.total_actual_kg)} kg" if record.total_actual_kg is not None else "—"),
-        ("Batching tolerance", f"± {_num(record.tolerance_pct)} %" if record.tolerance_pct is not None else "Not set"),
+        ("Batching tolerance", f"± {_num(record.tolerance_pct)} %" if record.tolerance_pct is not None else
+         ("Per material type, shown with each deviation" if any(c.tolerance_pct is not None for c in record.components)
+          else "Not set")),
     ], st))
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("Materials and lots used", st["h"]))
@@ -210,6 +212,8 @@ def batch_certificate_pdf(record: ProductionRecord, settings: PlantSettings, tes
     for c in record.components:
         t = tests.get(c.lot_test_id) if c.lot_test_id else None
         dev = f"{c.dev_pct:+.2f} %" if c.dev_pct is not None else "—"
+        if c.tolerance_pct is not None and record.tolerance_pct is None:
+            dev += f" (± {_num(c.tolerance_pct)} %)"
         data.append([
             Paragraph(_t(c.material_name), st["cell"]), Paragraph(_t(c.lot_no or "—"), st["cell"]),
             Paragraph(_t(f"{t.test_no} ({t.test_date:%d %b %Y})" if t else "—"), st["cell"]),
@@ -299,7 +303,7 @@ def production_excel(records: list[ProductionRecord]) -> bytes:
                 c.material_name if c else None, c.lot_no if c else None, c.lot_decision if c else None,
                 c.planned if c else None, c.actual if c else None, c.unit if c else None,
                 round(c.dev_pct, 3) if c and c.dev_pct is not None else None,
-                r.tolerance_pct, logic.PRODUCTION_LABELS.get(r.status, r.status), r.bags, r.bag_target_kg,
+                (c.tolerance_pct if c and c.tolerance_pct is not None else r.tolerance_pct), logic.PRODUCTION_LABELS.get(r.status, r.status), r.bags, r.bag_target_kg,
                 r.total_actual_kg, r.remarks, r.source, r.created_by.display if r.created_by else "",
             ])
     ws = _sheet(wb, "Production log", [

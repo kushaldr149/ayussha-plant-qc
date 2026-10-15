@@ -99,7 +99,7 @@ def dashboard(request: Request, db: Session = Depends(get_db), user: User = Depe
     settings = services.get_settings(db)
     steps = [
         ("Enter plant settings: plant name, product lines and batching tolerance",
-         bool(settings.plant_name and settings.tolerance_pct is not None)),
+         bool(settings.plant_name and settings.product_line_list and settings.tolerance_set)),
         ("Add the materials you receive", data["counts"]["materials"] > 0),
         ("Add test parameters with limits from your specifications", data["counts"]["parameters"] > 0),
         ("Add user accounts for QC, operators and management",
