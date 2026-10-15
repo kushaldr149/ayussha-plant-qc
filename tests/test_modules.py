@@ -339,6 +339,8 @@ def test_ai_review_includes_new_data(admin, monkeypatch):
     assert any(x["dispatch_no"].startswith("DN-") for x in d["dispatches"])
     assert any(x["overall"] == "pass" for x in d["strength_samples"])
     assert any(x["ncr_no"].startswith("NCR-") for x in d["ncrs"])
+    for k in ("coating_batches", "grinding_batches", "bags", "bag_counts_by_kind_and_status", "site_mixes"):
+        assert k in d
 
 
 def test_pages_render(admin):

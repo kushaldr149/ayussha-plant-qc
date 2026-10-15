@@ -32,9 +32,9 @@ FIBRE_CLASSES = ["Class I", "Class II", "Class III"]
 PHYS, CHEM = "Physical requirements", "Chemical requirements"
 
 
-def _p(std, name, group, unit, lo, hi, method, clause, freq, note="", value_type="number"):
+def _p(std, name, group, unit, lo, hi, method, clause, freq, note="", value_type="number", calc=""):
     return Param(name, group, unit=unit, min=lo, max=hi, method=method, clause=clause, frequency=freq, note=note,
-                 standard=std, value_type=value_type)
+                 standard=std, value_type=value_type, calc=calc)
 
 
 def ggbs_set(phys_freq: str, chem_freq: str) -> list[Param]:
@@ -42,7 +42,8 @@ def ggbs_set(phys_freq: str, chem_freq: str) -> list[Param]:
     c = lambda n, u, lo, hi, note="", clause="Table 1", method="IS 4032": _p(s, n, CHEM, u, lo, hi, method, clause, chem_freq, note)  # noqa: E731
     either = "Amendment 1 (2019): GGBS shall satisfy any one of the two ratio requirements (viii) and (ix)."
     return [
-        _p(s, "Fineness (Blaine specific surface)", PHYS, "m²/kg", 320, None, "IS 4031 (Part 2)", "Table 2", phys_freq),
+        _p(s, "Fineness (Blaine specific surface)", PHYS, "m²/kg", 320, None, "IS 4031 (Part 2)", "Table 2", phys_freq,
+           calc="blaine"),
         _p(s, "Slag activity index, 7 days", PHYS, "%", 60, None, "IS 4031 (Part 6)", "Table 2", phys_freq,
            "Blend of 50 % GGBS and 50 % control OPC 43 (IS 269, total alkalies 0.6–0.9 %), as percent of the control "
            "OPC mortar cube strength (Table 2 Note 2)."),

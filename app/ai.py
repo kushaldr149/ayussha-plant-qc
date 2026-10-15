@@ -9,8 +9,11 @@ import json
 
 from . import config
 
-PROMPT = """You are assisting the quality team of a dry mix concrete plant. The plant packs coated coarse \
-aggregate, fine aggregate and cementitious material in separate bulk bags. Review the plant records below.
+PROMPT = """You are assisting the quality team of a dry mix concrete plant. Coarse aggregate is coated in coating \
+batches; cement, GGBS, fly ash and microsilica are ground in grinding batches. Coated coarse aggregate and fine \
+aggregate are packed in aggregate jumbo bags, cementitious materials in cementitious jumbo bags, fibres in fibre bags \
+and admixtures in barrels. The bags go to site with a mixer on wheels, where site mixing records are kept. Review the \
+plant records below.
 
 Rules:
 - Use only the data given. Do not assume causes, standards, limits or values that are not in the data.
@@ -20,15 +23,25 @@ Rules:
 - Plain text. Short headings followed by short lines. No tables.
 
 Sections (skip a section if its data is empty):
-1. Summary: counts of material tests, out-of-limit tests, lots on hold, production records, records over tolerance, dispatches, strength samples, open NCRs.
+1. Summary: counts of material tests, out-of-limit tests, lots on hold, coating batches, grinding batches, bags by kind \
+and status, bags outside batching tolerance, production records, dispatches, site mixes, strength samples, open NCRs.
 2. Out-of-limit results, grouped by material and supplier, with the parameter, value and limit.
 3. Repeated issues: the same material, supplier or parameter out of limit more than once.
-4. Production records over tolerance, or using lots that were not accepted or had no QC record.
-5. Open decisions: lots on hold.
-6. Dispatch: deliveries still on the road, returned or cancelled trips, and bags dispatched from flagged production records.
-7. Strength tests: results below the acceptance values entered for the grade, and samples with no acceptance values.
-8. NCRs: open and overdue NCRs, and repeated sources.
-9. Data gaps: tests with values not entered, production records without planned values or lot numbers.
+4. Coating and grinding batches: batches on hold or rejected, batches that used lots not accepted or with no QC record, \
+batches with no QC test linked, and batches where coating % or fineness was not entered. Report entered values as given; \
+the data has no target values for them.
+5. Bags: bags outside the batching tolerance (with material, planned, actual and deviation), bags with no tolerance or \
+planned quantities, bags packed from lots not accepted or from batches not accepted, and flagged bags that were \
+dispatched or used at site.
+6. Production records over tolerance, or using lots that were not accepted or had no QC record.
+7. Open decisions: lots and batches on hold.
+8. Dispatch: deliveries still on the road, returned or cancelled trips, and bags dispatched from flagged records.
+9. Site mixing: per mix the water, water/binder ratio (state its basis as given in the data), mixing time, slump or \
+flow, temperatures and admixture doses; mixes with flagged bags; mixes with no cube sample; values not entered. \
+There are no limits for these in the data, so do not judge them against any limit.
+10. Strength tests: results below the acceptance values entered for the grade, and samples with no acceptance values.
+11. NCRs: open and overdue NCRs, and repeated sources.
+12. Data gaps: tests with values not entered, production records or bags without planned values or lot numbers.
 
 Data (JSON):
 """

@@ -24,7 +24,8 @@ def test_coarse_set_limits_other_concrete():
     assert (p["Passing 4.75 mm sieve"].min, p["Passing 4.75 mm sieve"].max) == (0, 10)
     assert p["Material finer than 75 µm"].max == 1.00
     assert p["Total deleterious materials (excluding mica)"].max == 2.00
-    assert p["Soft fragments"].max is None and "Enter the limit" in p["Soft fragments"].note
+    assert "Soft fragments" not in p and "Shale" not in p and "Mica" not in p   # Table 2 col 8: no requirement
+    assert "rows (i) to (v)" in p["Total deleterious materials (excluding mica)"].note
     assert p["Combined flakiness and elongation index"].max == 40
     assert p["Aggregate crushing value"].max is None
     assert p["Ten per cent fines value"].min == 50 and p["Ten per cent fines value"].unit == "kN"
@@ -44,30 +45,39 @@ def test_coarse_set_wearing_m65_frost_manufactured():
     assert p["Soundness, magnesium sulphate (5 cycles)"].max == 18
     assert p["Water absorption"].max == 5
     assert (p["Specific gravity (oven-dry)"].min, p["Specific gravity (oven-dry)"].max) == (2.1, 3.2)
-    assert p["Soft fragments"].max is None and "Enter the limit" in p["Soft fragments"].note
+    assert p["Soft fragments"].max == 3.00 and "Shale" not in p              # col 9
+    assert "rows (i) and (ii) only" in p["Total deleterious materials (excluding mica)"].note
     assert (p["Passing 2.36 mm sieve"].min, p["Passing 2.36 mm sieve"].max) == (0, 5)
     w = by_name(lib.coarse_set("Uncrushed", "Graded 40 mm", "wearing", m65=False, frost=False))
     assert w["Aggregate crushing value"].max == 30 and w["Aggregate impact value"].max == 30
     assert w["Total deleterious materials (excluding mica)"].max == 5.00
+    assert w["Soft fragments"].max == 3.00                                    # col 7
 
 
 def test_fine_set_limits():
-    p = by_name(lib.fine_set("Uncrushed (natural sand)", "Zone II", frost=True))
+    p = by_name(lib.fine_set("Uncrushed (natural sand)", "Zone II", frost=True, mica="muscovite"))
     assert (p["Passing 600 µm sieve"].min, p["Passing 600 µm sieve"].max) == (35, 59)
     assert (p["Passing 150 µm sieve"].min, p["Passing 150 µm sieve"].max) == (0, 10)
     assert p["Material finer than 75 µm"].max == 3.00
-    assert p["Shale"].max is None and "Enter the limit" in p["Shale"].note
+    assert p["Shale"].max == 1.00 and "Soft fragments" not in p             # col 4
+    assert p["Mica"].max == 3.00 and p["Total deleterious materials (including mica)"].max == 8.00
     assert p["Total deleterious materials (excluding mica)"].max == 5.00
     assert p["Organic impurities (colour test)"].value_type == "passfail"
     assert p["Soundness, sodium sulphate (5 cycles)"].max == 10
     assert p["Soundness, magnesium sulphate (5 cycles)"].max == 15
     assert "Fineness modulus" in p and "Bulking of sand" in p
-    c = by_name(lib.fine_set("Crushed stone sand", "Zone II", frost=False))
+    c = by_name(lib.fine_set("Crushed stone sand", "Zone II", frost=False, mica="both"))
     assert c["Passing 150 µm sieve"].max == 20
     assert c["Material finer than 75 µm"].max == 15.00
     assert c["Total deleterious materials (excluding mica)"].max == 2.00
-    assert by_name(lib.fine_set("Mixed sand", "Zone I", False))["Material finer than 75 µm"].max == 12.00
-    assert by_name(lib.fine_set("Manufactured", "Zone IV", False))["Material finer than 75 µm"].max == 10.00
+    assert "Shale" not in c and c["Mica"].max == 5.00                       # col 5
+    assert c["Total deleterious materials (including mica)"].max == 5.00
+    assert by_name(lib.fine_set("Mixed sand", "Zone I", False, "no_tests"))["Material finer than 75 µm"].max == 12.00
+    m = by_name(lib.fine_set("Manufactured", "Zone IV", False, "no_tests"))
+    assert m["Material finer than 75 µm"].max == 10.00 and m["Shale"].max == 1.00 and m["Mica"].max == 1.00
+    assert "Total deleterious materials (including mica)" not in m
+    with pytest.raises(ValueError, match="Note 3"):
+        lib.fine_set("Manufactured", "Zone II", False)
 
 
 def test_table_values_are_internally_consistent():
@@ -141,22 +151,22 @@ def test_apply_set_and_record_test(admin):
     admin.post("/setup/materials/new", {"name": "IS fixture sand", "category": "Fine aggregate", "stock_unit": "t"})
     with SessionLocal() as db:
         mid = db.scalars(select(Material).where(Material.name == "IS fixture sand")).one().id
-    page = admin.get(f"/setup/materials/{mid}/is383?preview=1&source=Uncrushed+%28natural+sand%29&zone=Zone+II").text
+    page = admin.get(f"/setup/materials/{mid}/is383?preview=1&source=Uncrushed+%28natural+sand%29&zone=Zone+II&mica=no_tests").text
     assert "Passing 600 µm sieve" in page and "35 – 59 %" in page
-    r = admin.post(f"/setup/materials/{mid}/is383", {"source": "Uncrushed (natural sand)", "zone": "Zone II"})
+    r = admin.post(f"/setup/materials/{mid}/is383", {"source": "Uncrushed (natural sand)", "zone": "Zone II", "mica": "no_tests"})
     assert r.status_code == 303
     with SessionLocal() as db:
         params = {p.name: p for p in db.scalars(select(QCParameter).where(QCParameter.material_id == mid)).all()}
-    assert len(params) == len(lib.fine_set("Uncrushed (natural sand)", "Zone II", False))
+    assert len(params) == len(lib.fine_set("Uncrushed (natural sand)", "Zone II", False, "no_tests"))
     assert params["Passing 600 µm sieve"].group_name == "Grading" and params["Passing 600 µm sieve"].sieve_mm == 0.6
     # applying again updates rather than duplicates
     admin.get(f"/setup/materials/{mid}/is383")
-    admin.post(f"/setup/materials/{mid}/is383", {"source": "Uncrushed (natural sand)", "zone": "Zone III"})
+    admin.post(f"/setup/materials/{mid}/is383", {"source": "Uncrushed (natural sand)", "zone": "Zone III", "mica": "no_tests"})
     with SessionLocal() as db:
         again = {p.name: p for p in db.scalars(select(QCParameter).where(QCParameter.material_id == mid)).all()}
     assert len(again) == len(params) and (again["Passing 600 µm sieve"].min_value, again["Passing 600 µm sieve"].max_value) == (60, 79)
     admin.get(f"/setup/materials/{mid}/is383")
-    admin.post(f"/setup/materials/{mid}/is383", {"source": "Uncrushed (natural sand)", "zone": "Zone II"})
+    admin.post(f"/setup/materials/{mid}/is383", {"source": "Uncrushed (natural sand)", "zone": "Zone II", "mica": "no_tests"})
 
     # worksheet endpoint
     admin.get("/qc/new")

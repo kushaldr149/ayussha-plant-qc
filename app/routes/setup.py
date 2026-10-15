@@ -348,12 +348,13 @@ def _template_options(material: Material) -> dict:
     fine = material.category == "Fine aggregate"
     return {"fine": fine, "coarse_sources": lib.COARSE_SOURCES, "fine_sources": lib.FINE_SOURCES,
             "gradings": list(lib.COARSE_GRADING), "zones": list(lib.FINE_ZONES), "uses": lib.USES,
-            "sources_list": lib.SOURCES}
+            "mica_bases": lib.MICA_BASES, "sources_list": lib.SOURCES}
 
 
 def _build_set(material: Material, opts) -> list:
     if material.category == "Fine aggregate":
-        return lib.fine_set(str(opts.get("source", "")), str(opts.get("zone", "")), opts.get("frost") == "on")
+        return lib.fine_set(str(opts.get("source", "")), str(opts.get("zone", "")), opts.get("frost") == "on",
+                            str(opts.get("mica", "")))
     if material.category == "Coarse aggregate":
         return lib.coarse_set(str(opts.get("source", "")), str(opts.get("grading", "")), str(opts.get("use", "")),
                               opts.get("m65") == "on", opts.get("frost") == "on")
@@ -391,7 +392,7 @@ async def is383_apply(mid: int, request: Request, db: Session = Depends(get_db),
     added, updated, deactivated = _upsert_params(db, m, items, form.get("deactivate_others") == "on")
     db.flush()
     audit.record(db, user, "apply_is383", "material", m.id, {
-        "material": m.name, "options": {k: str(form.get(k, "")) for k in ("source", "grading", "zone", "use", "m65", "frost")},
+        "material": m.name, "options": {k: str(form.get(k, "")) for k in ("source", "grading", "zone", "use", "m65", "frost", "mica")},
         "added": added, "updated": updated, "deactivated": deactivated})
     db.commit()
     msg = f"IS 383 test set applied to {m.name}: {added} parameter(s) added, {updated} updated"
@@ -517,7 +518,9 @@ def _preset_items(pr: dict, form) -> list:
             raise ValueError("select the type of fine aggregate")
         if g("zone") not in lib.FINE_ZONES:
             raise ValueError("select the grading zone to check against")
-        return lib.fine_set(g("source"), g("zone"), g("frost") == "on")
+        if g("mica") not in lib.MICA_BASES:
+            raise ValueError("select the mica limit case (IS 383 Table 2 Note 3)")
+        return lib.fine_set(g("source"), g("zone"), g("frost") == "on", g("mica"))
     if pr["set"] is None or (pr.get("optional") and g("apply") != "on"):
         return []
     opts = {f: form.get(f, "") for f in SHARED_FIELDS}
@@ -535,7 +538,7 @@ def _presets_ctx(db: Session) -> dict:
     for t in ts.SETS.values():
         sources += [s for s in t.sources if s not in sources]
     return {"groups": groups, "coarse_sources": lib.COARSE_SOURCES, "zones": list(lib.FINE_ZONES), "uses": lib.USES,
-            "frequencies": lib.FREQUENCIES, "existing": existing, "preset_fields": _preset_fields, "SETS": ts.SETS,
+            "frequencies": lib.FREQUENCIES, "mica_bases": lib.MICA_BASES, "existing": existing, "preset_fields": _preset_fields, "SETS": ts.SETS,
             "sources_list": sources}
 
 

@@ -60,21 +60,23 @@ def cement_set(kind: str, physical_freq: str, chemical_freq: str, declared_pct: 
     fin, lc, ac, ist, fst, s3, s7, s28, s28max = _PHYSICAL[kind]
     pf, cf = physical_freq, chemical_freq
 
-    def P(name, unit, lo, hi, method, clause, group="Physical requirements", freq=None, note=""):
+    def P(name, unit, lo, hi, method, clause, group="Physical requirements", freq=None, note="", calc=""):
         return Param(name, group, unit=unit, min=lo, max=hi, method=method, clause=clause, frequency=freq or pf,
-                     note=note, standard=std)
+                     note=note, standard=std, calc=calc)
 
     soundness_note = ("If the cement fails, retest after aeration (spread 75 mm deep, 50–80 % RH, 7 days); "
                       "aerated cement may expand not more than 5 mm (Le Chatelier) and 0.6 % (autoclave).")
     out = [
-        P("Fineness (Blaine specific surface)", "m²/kg", fin, None, "IS 4031 (Part 2)", phys_ref),
+        P("Fineness (Blaine specific surface)", "m²/kg", fin, None, "IS 4031 (Part 2)", phys_ref, calc="blaine"),
+        P("Standard consistency", "%", None, None, "IS 4031 (Part 4)", "", calc="consistency",
+          note=f"No limit in {std}. The value sets the water for the setting time and soundness tests."),
         P("Soundness, Le Chatelier expansion", "mm", None, lc, "IS 4031 (Part 3)", phys_ref, note=soundness_note),
         P("Soundness, autoclave expansion", "%", None, ac, "IS 4031 (Part 3)", phys_ref, note=soundness_note),
-        P("Initial setting time", "min", ist, None, "IS 4031 (Part 5)", phys_ref),
-        P("Final setting time", "min", None, fst, "IS 4031 (Part 5)", phys_ref),
-        P("Compressive strength, 3 days (72 ± 1 h)", "MPa", s3, None, "IS 4031 (Part 6)", phys_ref),
-        P("Compressive strength, 7 days (168 ± 2 h)", "MPa", s7, None, "IS 4031 (Part 6)", phys_ref),
-        P("Compressive strength, 28 days (672 ± 4 h)", "MPa", s28, s28max, "IS 4031 (Part 6)", phys_ref,
+        P("Initial setting time", "min", ist, None, "IS 4031 (Part 5)", phys_ref, calc="setting"),
+        P("Final setting time", "min", None, fst, "IS 4031 (Part 5)", phys_ref, calc="setting"),
+        P("Compressive strength, 3 days (72 ± 1 h)", "MPa", s3, None, "IS 4031 (Part 6)", phys_ref, calc="cube"),
+        P("Compressive strength, 7 days (168 ± 2 h)", "MPa", s7, None, "IS 4031 (Part 6)", phys_ref, calc="cube"),
+        P("Compressive strength, 28 days (672 ± 4 h)", "MPa", s28, s28max, "IS 4031 (Part 6)", phys_ref, calc="cube",
           note="The cement shall show a progressive increase in strength from the 3-day value." if blended else ""),
     ]
     if kind == "PPC":

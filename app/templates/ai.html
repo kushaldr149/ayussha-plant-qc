@@ -2,7 +2,7 @@
 {% block title %}AI review{% endblock %}
 {% block content %}
 <div class="toolbar"><div><h1>AI review</h1>
-<p class="muted">Claude reads the tests and production records in the chosen period and summarises out-of-limit results, repeated issues, open decisions and gaps in the data. It is told to use only these records. The review is advisory; decisions on lots stay with the QC team.</p></div></div>
+<p class="muted">Claude reads the material tests, coating and grinding batches, bags, production records, dispatches, site mixing, strength tests and NCRs in the chosen period and summarises out-of-limit results, repeated issues, open decisions and gaps in the data. It is told to use only these records. The review is advisory; decisions on lots stay with the QC team.</p></div></div>
 {% if not enabled %}
 <div class="alert warn">AI review is switched off. Add a Claude API key as <span class="mono">ANTHROPIC_API_KEY</span> in the <span class="mono">.env</span> file and restart the app. Keys are created in the Claude Console.</div>
 {% endif %}

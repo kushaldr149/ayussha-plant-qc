@@ -432,3 +432,99 @@ def mix_summary(mix: SiteMix) -> dict:
                 aggregate += kg
     wb = round(mix.water_l / binder, 3) if mix.water_l is not None and binder else None
     return {"binder_kg": binder, "aggregate_kg": aggregate, "wb": wb, "unknown_units": unknown}
+
+
+# ---------------------------------------------------------------- AI review data
+
+def _num(x, nd=2):
+    return round(x, nd) if isinstance(x, (int, float)) else x
+
+
+def review_data(db: Session, date_from, date_to, limit: int) -> dict:
+    """Coating and grinding batches, bags and site mixing records in the period, for the AI review.
+
+    Only stored values are sent; nothing is derived except the bag totals and water/binder ratio of a site mix,
+    which are labelled with how they were calculated."""
+    batches = db.scalars(select(ProcessBatch).where(ProcessBatch.batch_date >= date_from, ProcessBatch.batch_date <= date_to)
+                         .options(selectinload(ProcessBatch.inputs)).order_by(ProcessBatch.batch_date.desc())
+                         .limit(limit)).all()
+    tests = {}
+    tids = [b.qc_test_id for b in batches if b.qc_test_id]
+    if tids:
+        tests = {t.id: t for t in db.scalars(select(QCTest).where(QCTest.id.in_(tids))).all()}
+
+    def batch_row(b: ProcessBatch) -> dict:
+        t = tests.get(b.qc_test_id)
+        row = {"batch_no": b.batch_no, "date": b.batch_date.isoformat(), "shift": b.shift or None,
+               "equipment": b.equipment.name if b.equipment else None,
+               "output": {"material": b.output_material_name, "lot_no": b.output_lot_no, "qty": b.output_qty,
+                          "unit": b.output_unit},
+               "decision": b.decision, "used_lots_not_accepted": b.lot_issue, "remarks": b.remarks or None,
+               "qc_test": ({"test_no": t.test_no, "overall": t.overall, "decision": t.decision} if t else None),
+               "inputs": [{"role": i.role, "material": i.material_name, "lot_no": i.lot_no or None,
+                           "lot_decision": i.lot_decision or "no QC record", "qty": i.qty, "unit": i.unit}
+                          for i in b.inputs]}
+        if b.kind == "coating":
+            row["coating_pct_entered"] = b.coating_pct
+        else:
+            row["blaine_m2_per_kg_entered"] = b.blaine_m2kg
+            row["residue_45_micron_pct_entered"] = b.residue45_pct
+        return row
+
+    packs = db.scalars(select(Pack).where(Pack.pack_date >= date_from, Pack.pack_date <= date_to)
+                       .options(selectinload(Pack.items), selectinload(Pack.order), selectinload(Pack.dispatch),
+                                selectinload(Pack.site_mix))
+                       .order_by(Pack.pack_date.desc(), Pack.pack_no.desc()).limit(limit)).all()
+    bnos = {b.id: b.batch_no for b in db.scalars(select(ProcessBatch).where(
+        ProcessBatch.id.in_({it.batch_id for p in packs for it in p.items if it.batch_id}))).all()} if packs else {}
+    bdec = {b.batch_no: b.decision for b in batches}
+    counts: dict[str, dict[str, int]] = {}
+    for p in packs:
+        counts.setdefault(p.kind, {}).setdefault(p.status, 0)
+        counts[p.kind][p.status] += 1
+
+    def pack_row(p: Pack) -> dict:
+        return {"pack_no": p.pack_no, "kind": p.kind, "date": p.pack_date.isoformat(), "order_no": p.order.order_no,
+                "mix_design": p.recipe_name or None, "net_kg": _num(p.net_kg), "tolerance_pct": p.tolerance_pct,
+                "largest_deviation_pct": _num(p.max_abs_dev_pct),
+                "batching_check": {"ok": "within tolerance", "over": "outside tolerance", "notol": "no tolerance set",
+                                   "nodata": "no planned quantities"}.get(p.batching_status, p.batching_status),
+                "used_lots_not_accepted": p.lot_issue, "status": p.status,
+                "dispatch_no": p.dispatch.dispatch_no if p.dispatch else None,
+                "site_mix_no": p.site_mix.mix_no if p.site_mix else None, "remarks": p.remarks or None,
+                "contents": [{"material": it.material_name, "lot_no": it.lot_no or None,
+                              "lot_decision": it.lot_decision or "no QC record",
+                              "from_batch": bnos.get(it.batch_id), "batch_decision": bdec.get(bnos.get(it.batch_id)),
+                              "planned": _num(it.planned), "actual": it.actual, "unit": it.unit,
+                              "deviation_pct": _num(it.dev_pct)} for it in p.items]}
+
+    mixes = db.scalars(select(SiteMix).where(SiteMix.mix_date >= date_from, SiteMix.mix_date <= date_to)
+                       .options(selectinload(SiteMix.packs).selectinload(Pack.items),
+                                selectinload(SiteMix.admixtures).selectinload(SiteMixAdmixture.pack).selectinload(Pack.items))
+                       .order_by(SiteMix.mix_date.desc()).limit(limit)).all()
+
+    def mix_row(m: SiteMix) -> dict:
+        s = mix_summary(m)
+        d = m.dispatch
+        return {"mix_no": m.mix_no, "date": m.mix_date.isoformat(), "dispatch_no": d.dispatch_no,
+                "order_no": d.order.order_no, "customer": d.order.customer.name, "element": m.element or None,
+                "volume_m3": m.volume_m3, "water_l": m.water_l, "mixing_time_min": m.mixing_time_min,
+                "slump_mm": m.slump_mm, "flow_mm": m.flow_mm, "concrete_temp_c": m.concrete_temp_c,
+                "ambient_temp_c": m.ambient_temp_c, "supervisor": m.supervisor or None, "remarks": m.remarks or None,
+                "cube_sample_no": m.cube_sample.sample_no if m.cube_sample else None,
+                "bags_used": [{"pack_no": p.pack_no, "kind": p.kind, "flagged": flagged(p)} for p in m.packs],
+                "admixture_doses": [{"pack_no": a.pack.pack_no,
+                                     "product": ", ".join(it.material_name for it in a.pack.items) or None,
+                                     "dose": a.dose, "unit": a.unit} for a in m.admixtures],
+                "binder_kg_from_bags": _num(s["binder_kg"], 1), "aggregate_kg_from_bags": _num(s["aggregate_kg"], 1),
+                "water_binder_ratio": s["wb"],
+                "water_binder_basis": "water litres taken as kg, divided by the cementitious bag contents used",
+                "bag_units_not_convertible": s["unknown_units"]}
+
+    return {
+        "coating_batches": [batch_row(b) for b in batches if b.kind == "coating"],
+        "grinding_batches": [batch_row(b) for b in batches if b.kind == "grinding"],
+        "bag_counts_by_kind_and_status": counts,
+        "bags": [pack_row(p) for p in packs],
+        "site_mixes": [mix_row(m) for m in mixes],
+    }

@@ -81,7 +81,7 @@ def test_standard_materials_page(admin):
         "ca20_on": "on", "ca20_name": "20 mm down", "ca20_source": "Crushed", "ca20_grading": "Graded 20 mm", "ca20_use": "other",
         "ca12_on": "on", "ca12_name": "12.5 mm down", "ca12_source": "Crushed", "ca12_grading": "Single-sized 12.5 mm",
         "ca12_use": "other",
-        "msand_on": "on", "msand_name": "M-sand", "msand_source": "Crushed stone sand", "msand_zone": "Zone II",
+        "msand_on": "on", "msand_name": "M-sand", "msand_source": "Crushed stone sand", "msand_zone": "Zone II", "msand_mica": "no_tests",
         "opc43_on": "on", "opc43_name": "OPC-43 grade", "opc53_on": "on", "opc53_name": "OPC-53 grade",
         "ppc_on": "on", "ppc_name": "PPC", "ppc_declared": "30", "psc_on": "on", "psc_name": "PSC",
         "phys_freq": "Every lot", "chem_freq": "When required",
@@ -135,3 +135,36 @@ def test_cement_page_preview_and_apply(admin):
     assert r.status_code == 303
     r = admin.post(f"/setup/materials/{sand.id}/set", {"set": "opc43", "phys_freq": "Every lot", "chem_freq": "Monthly"})
     assert r.status_code == 303 and "Passing 600 µm sieve" in str(_mat("M-sand")[1].keys())
+
+
+def test_cement_worksheets():
+    from app import is_library as lib
+    from app import scm_library as scm
+    # IS 4031 Pt 6 cl. 8.1: 250 kN on 70.6 x 70.6 = 50.16 MPa; the low cube (40 kN-> 8 MPa off) is disregarded.
+    r = lib.run_calc("cube", {"L1": 70.6, "B1": 70.6, "P1": 250, "L2": 70.6, "B2": 70.6, "P2": 255,
+                              "L3": 70.6, "B3": 70.6, "P3": 200})
+    assert r["disregarded"] == "cube 3" and r["value"] == 50.5          # mean of 50.16 and 51.16 = 50.66 -> 50.5
+    r = lib.run_calc("cube", {"L1": 70.6, "B1": 70.6, "P1": 250, "L2": 70.6, "B2": 70.6, "P2": 252})
+    assert r["disregarded"] == "none" and r["value"] == 50.5            # 50.36 -> 50.5
+    with pytest.raises(ValueError, match="retest"):
+        lib.run_calc("cube", {"L1": 70, "B1": 70, "P1": 100, "L2": 70, "B2": 70, "P2": 200})
+    with pytest.raises(ValueError, match="at least two"):
+        lib.run_calc("cube", {"L1": 70, "B1": 70, "P1": 100})
+    with pytest.raises(ValueError, match="Enter P2"):
+        lib.run_calc("cube", {"L1": 70, "B1": 70, "P1": 100, "L2": 70, "B2": 70})
+    assert lib.run_calc("consistency", {"W": 112, "C": 400})["value"] == 28.0
+    s = lib.run_calc("setting", {"Ti": 92, "Tf": 247.5, "P": 28, "Mc": 400})
+    assert (s["initial"], s["final"], s["water_g"]) == (90, 250, 95.2)
+    with pytest.raises(ValueError):
+        lib.run_calc("setting", {"Ti": 100, "Tf": 50})
+    b = lib.run_calc("blaine", {"K": 2.0, "rho": 3.15, "T": 27, "t1": 60, "t2": 61})
+    s1, s2 = 521.08 * 2 * 60 ** 0.5 / 3.15, 521.08 * 2 * 61 ** 0.5 / 3.15
+    assert b["cm2_per_g"] == round((s1 + s2) / 2 / 10) * 10 and b["value"] == b["cm2_per_g"] / 10
+    assert lib.run_calc("blaine", {"K": 2.0, "rho": 3.15, "T": 20, "t1": 60})["cm2_per_g"] == round(524.2 * 2 * 60 ** 0.5 / 3.15 / 10) * 10
+    with pytest.raises(ValueError, match="27 ± 2"):
+        lib.run_calc("blaine", {"K": 2.0, "rho": 3.15, "T": 24, "t1": 60})
+    p = by_name(cem.cement_set("OPC 53", "Every lot", "Monthly"))
+    assert p["Fineness (Blaine specific surface)"].calc == "blaine" and p["Standard consistency"].calc == "consistency"
+    assert p["Initial setting time"].calc == p["Final setting time"].calc == "setting"
+    assert all(p[n].calc == "cube" for n in p if n.startswith("Compressive strength"))
+    assert by_name(scm.ggbs_set("Every lot", "Monthly"))["Fineness (Blaine specific surface)"].calc == "blaine"

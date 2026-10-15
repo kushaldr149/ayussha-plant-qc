@@ -11,9 +11,10 @@ Sources read for this module (October 2026):
   * IS 2386 Parts 1 to 4 (1963, law.resource.org copies): calculation formulas.
 
 Rules followed:
-  * A limit is filled in only where it could be confirmed in the copies of IS 383:2016 read. Where a value could
-    not be matched to its column (Table 2: soft fragments, shale; mica depends on testing), the limit is left
-    empty and the note says so, so the user enters it from their copy.
+  * A limit is filled in only where it could be confirmed in the copies of IS 383:2016 read. Table 2 (soft
+    fragments, shale, Note 3 mica) was confirmed from the full-resolution BIS page image on archive.org; where
+    Table 2 shows "—" for a column, that parameter is not added. Mica is fine aggregate only (Note 3) and the user
+    chooses which of its three cases applies.
   * Frequencies are the BIS product manual levels of control, which the manual itself calls
     recommendatory. They can be changed per parameter in Setup.
 """
@@ -98,56 +99,83 @@ USES = {"wearing": "Concrete for wearing surfaces", "other": "Other concrete"}
 
 # ---------------------------------------------------------------- test sets
 
+# IS 383:2016 Table 2, read from the BIS page image (archive.org gov.in.is.383.2016, page n4):
+# columns 4 to 9 = fine uncrushed, fine crushed/mixed, fine manufactured, coarse uncrushed, coarse crushed,
+# coarse manufactured. "—" in the table = no requirement, so the parameter is not added for that column.
+TOTAL_NOTE = {
+    "rows_i_v": "Table 2 row (vi): for this column the total includes rows (i) to (v).",
+    "rows_i_ii": "Table 2 row (vi): for this column the total includes rows (i) and (ii) only.",
+}
+
+# Table 2 Note 3 (fine aggregate). The user chooses which case applies.
+MICA_BASES = {
+    "no_tests": ("No strength and durability tests are conducted", 1.00),
+    "muscovite": ("Workability, strength, permeability and abrasion tests are conducted; muscovite mica", 3.00),
+    "both": ("Workability, strength, permeability and abrasion tests are conducted; muscovite and biotite mica", 5.00),
+}
+MICA_NOTE = ("IS 383:2016 Table 2 Note 3: where no tests for strength and durability are conducted, mica may be limited "
+             "to 1.00 %; where tests are conducted to ensure adequate workability, satisfactory strength, permeability and "
+             "abrasion (for wearing surfaces), up to 3.00 % muscovite mica is permitted; with both muscovite and biotite "
+             "mica, 5.00 % maximum. This is subject to total deleterious materials (including mica) of 8.00 % for "
+             "uncrushed sand (col 4) and 5.00 % for crushed/mixed sand (col 5). IS 2386 (Part 2) has no mica method yet; "
+             "the note says petrographic, density separation and wind blowing methods can normally be used.")
+
+
 def _deleterious_coarse(source: str) -> list[Param]:
     total = 5.00 if source == "Uncrushed" else 2.00
-    return [
+    out = [
         Param("Material finer than 75 µm", "Deleterious materials", max=1.00, method="IS 2386 (Part 1)",
               clause="Table 2", frequency="Monthly", calc="finer75"),
         Param("Clay lumps", "Deleterious materials", max=1.00, method="IS 2386 (Part 2)", clause="Table 2",
               frequency="Monthly", calc="claylumps"),
         Param("Coal and lignite", "Deleterious materials", max=1.00, method="IS 2386 (Part 2)", clause="Table 2",
               frequency="Monthly", calc="lightweight"),
-        Param("Soft fragments", "Deleterious materials", method="IS 2386 (Part 2)", clause="Table 2",
-              frequency="Monthly",
-              note="The soft fragment limits could not be matched to their columns in the copies read. "
-                   "Enter the limit from IS 383:2016 Table 2."),
-        Param("Shale", "Deleterious materials", method="Petrographic examination, IS 2386 (Part 8)", clause="Table 2",
-              frequency="Quarterly",
-              note="The shale limits could not be matched to their columns in the copies read. Enter the limit from IS 383:2016 Table 2."),
-        Param("Total deleterious materials (excluding mica)", "Deleterious materials", max=total, clause="Table 2",
-              frequency="Quarterly"),
-        Param("Mica", "Deleterious materials", method="Petrographic examination, IS 2386 (Part 8)",
-              clause="Table 2 Note 3", frequency="Quarterly",
-              note="Limit depends on the mica type and on testing (IS 383:2016 Table 2 Note 3). Enter the applicable limit."),
     ]
+    if source in ("Uncrushed", "Manufactured"):      # col 7 and col 9: 3.00; col 8 (crushed): no requirement
+        out.append(Param("Soft fragments", "Deleterious materials", max=3.00, method="IS 2386 (Part 2)",
+                         clause="Table 2", frequency="Monthly"))
+    out.append(Param("Total deleterious materials (excluding mica)", "Deleterious materials", max=total,
+                     clause="Table 2", frequency="Quarterly",
+                     note=TOTAL_NOTE["rows_i_ii" if source == "Manufactured" else "rows_i_v"]))
+    return out
 
 
-def _deleterious_fine(source: str) -> list[Param]:
+def _deleterious_fine(source: str, mica: str) -> list[Param]:
+    if mica not in MICA_BASES:
+        raise ValueError("Select which case of IS 383 Table 2 Note 3 applies to mica.")
     finer = {"Uncrushed (natural sand)": 3.00, "Crushed stone sand": 15.00, "Mixed sand": 12.00, "Manufactured": 10.00}[source]
-    total = 5.00 if source == "Uncrushed (natural sand)" else 2.00
-    return [
+    uncrushed = source == "Uncrushed (natural sand)"
+    col5 = source in ("Crushed stone sand", "Mixed sand")
+    total = 5.00 if uncrushed else 2.00
+    out = [
         Param("Material finer than 75 µm", "Deleterious materials", max=finer, method="IS 2386 (Part 1)",
               clause="Table 2", frequency="Monthly", calc="finer75",
-              note="Blended sand: each sand must meet Table 2, and uncrushed sand used for blending should not exceed "
-                   "3.00 % (Table 2 Note 1)." if source == "Mixed sand" else ""),
+              note="Blended sand: each sand must meet Table 2, and uncrushed sand used for blending shall not have "
+                   "material finer than 75 µm more than 3.00 % (Table 2 Note 1)." if source == "Mixed sand" else ""),
         Param("Clay lumps", "Deleterious materials", max=1.00, method="IS 2386 (Part 2)", clause="Table 2",
               frequency="Monthly", calc="claylumps"),
         Param("Coal and lignite", "Deleterious materials", max=1.00, method="IS 2386 (Part 2)", clause="Table 2",
               frequency="Monthly", calc="lightweight"),
-        Param("Shale", "Deleterious materials", method="Petrographic examination, IS 2386 (Part 8)",
-              clause="Table 2", frequency="Quarterly",
-              note="The shale limits could not be matched to their columns in the copies read. "
-                   "Enter the limit from IS 383:2016 Table 2."),
-        Param("Total deleterious materials (excluding mica)", "Deleterious materials", max=total, clause="Table 2",
-              frequency="Quarterly"),
-        Param("Mica", "Deleterious materials", method="Petrographic examination, IS 2386 (Part 8)",
-              clause="Table 2 Note 3", frequency="Quarterly",
-              note="Limit depends on the mica type and on testing (IS 383:2016 Table 2 Note 3). Enter the applicable limit."),
-        Param("Organic impurities (colour test)", "Deleterious materials", unit="", method="IS 2386 (Part 2)",
-              clause="Table 2 Note 4", frequency="Six-monthly", value_type="passfail",
-              note="Fail = liquid darker than the standard solution. Such sand can still be accepted if mortar strength "
-                   "at 7 and 28 days is at least 95 % of the reference (Table 2 Note 4)."),
     ]
+    if not col5:                                      # col 4 and col 6: 1.00; col 5 (crushed/mixed): no requirement
+        out.append(Param("Shale", "Deleterious materials", max=1.00, method="Petrography", clause="Table 2 Note 2",
+                         frequency="Quarterly",
+                         note="Table 2 Note 2: clay stones that are harder, platy and fissile are shales; their presence "
+                              "and extent is determined by petrography at the time of selection and change of source."))
+    out.append(Param("Total deleterious materials (excluding mica)", "Deleterious materials", max=total,
+                     clause="Table 2", frequency="Quarterly",
+                     note=TOTAL_NOTE["rows_i_v" if uncrushed else "rows_i_ii"]))
+    label, limit = MICA_BASES[mica]
+    out.append(Param("Mica", "Deleterious materials", max=limit, method="Petrographic, density separation or wind blowing",
+                     clause="Table 2 Note 3", frequency="Quarterly", note=f"Case chosen: {label}. " + MICA_NOTE))
+    if mica != "no_tests" and (uncrushed or col5):
+        out.append(Param("Total deleterious materials (including mica)", "Deleterious materials",
+                         max=8.00 if uncrushed else 5.00, clause="Table 2 Note 3", frequency="Quarterly"))
+    out.append(Param("Organic impurities (colour test)", "Deleterious materials", unit="", method="IS 2386 (Part 2)",
+                     clause="Table 2 Note 4", frequency="Six-monthly", value_type="passfail",
+                     note="Fail = liquid darker than the standard solution. Such sand can still be accepted if mortar "
+                          "strength at 7 and 28 days is at least 95 % of the reference (Table 2 Note 4)."))
+    return out
 
 
 def _physical(manufactured: bool, fine: bool) -> list[Param]:
@@ -232,7 +260,7 @@ def coarse_set(source: str, grading: str, use: str, m65: bool, frost: bool) -> l
     return out
 
 
-def fine_set(source: str, zone: str, frost: bool) -> list[Param]:
+def fine_set(source: str, zone: str, frost: bool, mica: str = "") -> list[Param]:
     if source not in FINE_SOURCES or zone not in FINE_ZONES:
         raise ValueError("Unknown option.")
     crushed = source == "Crushed stone sand"
@@ -247,7 +275,7 @@ def fine_set(source: str, zone: str, frost: bool) -> list[Param]:
                          clause=f"Table 9 ({zone})", calc="sieve", sieve_mm=float(mm), note=note))
     out.append(Param("Fineness modulus", "Grading", unit="", method="IS 2386 (Part 1) sieve analysis", calc="sieve",
                      note="Calculated from the sieve analysis. IS 383:2016 sets no limit; recorded for mix design."))
-    out += _deleterious_fine(source)
+    out += _deleterious_fine(source, mica)
     out += _physical(source == "Manufactured", fine=True)
     if frost:
         out += _soundness(fine=True)
@@ -353,6 +381,32 @@ CALCS = {
     "bulking": Calc("Bulking of sand (container method)", "IS 2386 (Part 3) cl. 4.3",
                     [("h", "Height of loose damp sand, mm"), ("h2", "Height after inundation, mm")],
                     ["Bulking (%) = (h / h2 − 1) × 100"]),
+    # ---- cement worksheets (IS 4031, 1988/1999 texts, law.resource.org copies)
+    "cube": Calc("Mortar cube compressive strength", "IS 4031 (Part 6):1988 cl. 8.1",
+                 [("L1", "Cube 1: mean length of loaded face, mm"), ("B1", "Cube 1: mean width of loaded face, mm"),
+                  ("P1", "Cube 1: maximum load, kN"),
+                  ("L2", "Cube 2: mean length, mm"), ("B2", "Cube 2: mean width, mm"), ("P2", "Cube 2: maximum load, kN"),
+                  ("L3", "Cube 3: mean length, mm"), ("B3", "Cube 3: mean width, mm"), ("P3", "Cube 3: maximum load, kN")],
+                 ["Strength (MPa = N/mm²) = P × 1000 / (L × B)   for each cube",
+                  "Cubes differing by more than 10 % from the average of all cubes are disregarded (cl. 8.1)",
+                  "Result = average of the remaining cubes, to the nearest 0.5 MPa; fewer than 2 remaining = retest"]),
+    "consistency": Calc("Standard consistency (Vicat plunger 5 to 7 mm from the bottom of the mould)",
+                        "IS 4031 (Part 4):1988 cl. 5, 6.1",
+                        [("W", "Mass of water in the paste that gave 5 to 7 mm, g"), ("C", "Mass of cement, g")],
+                        ["Standard consistency P (%) = W / C × 100, to the first decimal place (cl. 6.1)"]),
+    "setting": Calc("Initial and final setting time", "IS 4031 (Part 5):1988 cl. 5, 6.1",
+                    [("Ti", "Time from adding water to initial set, min"),
+                     ("Tf", "Time from adding water to final set, min"),
+                     ("P", "Optional: standard consistency, %"), ("Mc", "Optional: mass of cement, g")],
+                    ["Initial and final setting time are reported to the nearest five minutes (cl. 6.1)",
+                     "Gauging water (g) = 0.85 × P / 100 × Mc   (paste at 0.85 times standard consistency water, cl. 5.1)"]),
+    "blaine": Calc("Fineness by Blaine air permeability (porosity 0.500)", "IS 4031 (Part 2):1999 cl. 5.3.1, 5.7",
+                   [("K", "Apparatus constant"), ("rho", "Density of cement, g/cm³"), ("T", "Test temperature, °C"),
+                    ("t1", "Bed 1: time of flow, s"), ("t2", "Optional: bed 2: time of flow, s")],
+                   ["At 27 ± 2 °C: S (cm²/g) = 521.08 × K × √t / ρ",
+                    "At 20 ± 2 °C: S (cm²/g) = 524.2 × K × √t / ρ",
+                    "S is the mean of the beds tested, reported to the nearest 10 cm²/g (cl. 5.7)",
+                    "m²/kg = cm²/g ÷ 10"]),
 }
 
 # Fine sieves used for fineness modulus = sum of cumulative % retained on these sieves / 100.
@@ -361,6 +415,12 @@ FM_SIEVES = [80, 40, 20, 10, 4.75, 2.36, 1.18, 0.6, 0.3, 0.15]
 
 def _r(v: float, nd: int = 2) -> float:
     return round(v + 0.0, nd)
+
+
+def _nearest(v: float, step: float) -> float:
+    """Round to the nearest multiple of step, halves upward (IS 2 rounding of a positive value)."""
+    import math
+    return math.floor(v / step + 0.5) * step
 
 
 def run_calc(key: str, values: dict[str, float]) -> dict[str, float]:
@@ -420,6 +480,54 @@ def run_calc(key: str, values: dict[str, float]) -> dict[str, float]:
     if key == "bulking":
         need("h", "h2")
         return {"value": _r((v["h"] / nonzero(v["h2"], "h2") - 1) * 100, 1)}
+    if key == "cube":
+        cubes = {}
+        for i in (1, 2, 3):
+            got = [k for k in (f"L{i}", f"B{i}", f"P{i}") if k in v]
+            if not got:
+                continue
+            need(f"L{i}", f"B{i}", f"P{i}")
+            cubes[i] = v[f"P{i}"] * 1000 / nonzero(v[f"L{i}"] * v[f"B{i}"], f"L{i} × B{i}")
+        if len(cubes) < 2:
+            raise ValueError("Enter at least two cubes.")
+        avg = sum(cubes.values()) / len(cubes)
+        kept = {i: x for i, x in cubes.items() if abs(x - avg) <= 0.10 * avg}
+        out = {f"cube{i}": _r(x, 2) for i, x in cubes.items()}
+        out["disregarded"] = ", ".join(f"cube {i}" for i in cubes if i not in kept) or "none"
+        if len(kept) < 2:
+            raise ValueError("Fewer than two cubes are within 10 % of the average: IS 4031 (Part 6) cl. 8.1 "
+                             "requires a retest.")
+        out["value"] = _nearest(sum(kept.values()) / len(kept), 0.5)
+        return out
+    if key == "consistency":
+        need("W", "C")
+        return {"value": _r(v["W"] / nonzero(v["C"], "C") * 100, 1)}
+    if key == "setting":
+        need("Ti", "Tf")
+        if v["Tf"] < v["Ti"]:
+            raise ValueError("Final setting time cannot be less than the initial setting time.")
+        out = {"initial": _nearest(v["Ti"], 5), "final": _nearest(v["Tf"], 5)}
+        if "P" in v and "Mc" in v:
+            out["water_g"] = _r(0.85 * v["P"] / 100 * v["Mc"], 1)
+        return out
+    if key == "blaine":
+        need("K", "rho", "T", "t1")
+        if 25 <= v["T"] <= 29:
+            const = 521.08
+        elif 18 <= v["T"] <= 22:
+            const = 524.2
+        else:
+            raise ValueError("Test temperature must be 27 ± 2 °C or 20 ± 2 °C for these formulas (IS 4031 Part 2 cl. 5.1).")
+        rho = nonzero(v["rho"], "rho")
+        times = [v[k] for k in ("t1", "t2") if k in v]
+        if any(t <= 0 for t in times):
+            raise ValueError("Time of flow must be more than zero.")
+        each = [const * v["K"] * t ** 0.5 / rho for t in times]
+        s_cm2g = _nearest(sum(each) / len(each), 10)
+        out = {"cm2_per_g": s_cm2g, "value": _r(s_cm2g / 10, 1)}
+        for i, x in enumerate(each, 1):
+            out[f"bed{i}_cm2_per_g"] = _r(x, 0)
+        return out
     raise ValueError("Unknown worksheet.")
 
 

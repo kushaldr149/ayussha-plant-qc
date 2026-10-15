@@ -50,9 +50,10 @@ Retained on {{ k }} mm: {{ val }} g{% endfor %}{% if w.inputs.get("pan") not in 
 Pan: {{ w.inputs.get("pan") }} g{% endif %}{% if w.results and w.results.fm is not none %}
 Fineness modulus = {{ w.results.fm }}{% endif %}</div>
             {% else %}
-            <div class="mono">{% for k, val in w.inputs.items() %}{{ k }} = {{ val }}{% if w.labels.get(k) %} ({{ w.labels[k] }}){% endif %}
+            <div class="mono">{% for k, val in w.inputs.items() if val not in (none, "") %}{{ k }} = {{ val }}{% if w.labels.get(k) %} ({{ w.labels[k] }}){% endif %}
 {% endfor %}{% for f in w.formulas %}{{ f }}
-{% endfor %}</div>
+{% endfor %}{% if w.results is mapping %}{% for k, val in w.results.items() if k != "value" %}{{ k }} = {{ val }}
+{% endfor %}{% endif %}</div>
             {% endif %}
           </details>{% endif %}</td>
         <td class="muted small">{{ r.method or "—" }}</td>

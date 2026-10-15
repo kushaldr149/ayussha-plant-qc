@@ -259,6 +259,23 @@ def test_plant_flow(admin):
                 f"/process/batches/{grind_id}", f"/orders/{oid}"):
         assert admin.get(url).status_code == 200, url
 
+    # ---- AI review data covers the plant process
+    import json as _json
+    from datetime import date as _d
+    from app import ai
+    with SessionLocal() as db:
+        d = process.review_data(db, _d(2000, 1, 1), _d(2100, 1, 1), 500)
+    assert coat_no in [b["batch_no"] for b in d["coating_batches"]]
+    assert grind_no in [b["batch_no"] for b in d["grinding_batches"]]
+    assert "coating_pct_entered" in d["coating_batches"][0] and "blaine_m2_per_kg_entered" in d["grinding_batches"][0]
+    mix = next(m for m in d["site_mixes"] if m["water_l"] == 160)
+    assert mix["water_binder_ratio"] == 0.4 and mix["admixture_doses"][0]["dose"] == 3
+    cem = next(b for b in d["bags"] if b["kind"] == "Cementitious jumbo bag" and b["status"] == "Used at site")
+    assert cem["site_mix_no"] == mix["mix_no"] and cem["contents"]
+    assert d["bag_counts_by_kind_and_status"]["Aggregate jumbo bag"]
+    _json.dumps(d, default=str)
+    assert "Site mixing" in ai.PROMPT and "grinding batches" in ai.PROMPT
+
 
 def test_set_page_for_new_categories(admin):
     with SessionLocal() as db:

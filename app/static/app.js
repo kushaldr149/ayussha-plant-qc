@@ -96,7 +96,9 @@
     };
     /* Output key of a multi-result worksheet -> parameter, matched by the start of the parameter name. */
     const OUT_MATCH = { flakiness: /^flakiness/i, elongation: /^elongation/i, combined: /^combined/i,
-      sg: /^specific gravity/i, apparent: /^apparent/i, absorption: /^water absorption/i };
+      sg: /^specific gravity/i, apparent: /^apparent/i, absorption: /^water absorption/i,
+      initial: /^initial setting/i, final: /^final setting/i };
+    const MULTI = ["shape", "sg_basket", "sg_pycnometer", "setting"];
 
     const worksheet = (key, params) => {
       const c = CALCS[key];
@@ -155,9 +157,9 @@
             <td class="pres"></td></tr>`);
           if (p.calc && p.calc !== "sieve" && CALCS[p.calc] && !sheetFor.has(p.calc)) {
             sheetFor.add(p.calc);
-            const siblings = ["shape", "sg_basket", "sg_pycnometer"].includes(p.calc) ? m.params.filter((x) => x.calc === p.calc) : [p];
+            const siblings = MULTI.includes(p.calc) ? m.params.filter((x) => x.calc === p.calc) : [p];
             rows.push(worksheet(p.calc, siblings));
-          } else if (p.calc && p.calc !== "sieve" && CALCS[p.calc] && !["shape", "sg_basket", "sg_pycnometer"].includes(p.calc)) {
+          } else if (p.calc && p.calc !== "sieve" && CALCS[p.calc] && !MULTI.includes(p.calc)) {
             rows.push(worksheet(p.calc, [p]).replace(`data-ws="${p.calc}"`, `data-ws="${p.calc}" data-own="${p.id}"`));
           }
         });

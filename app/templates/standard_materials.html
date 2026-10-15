@@ -38,6 +38,8 @@
         <label class="f"><span>Grading zone to check against (IS 383 Table 9)</span><select name="{{ k }}_zone" id="z_{{ k }}"><option value="">— Select —</option>
           {% for z in zones %}<option {% if form.get(k ~ '_zone') == z %}selected{% endif %}>{{ z }}</option>{% endfor %}</select>
           <span class="hint">Every test also shows which zones the grading actually falls in.</span></label>
+        <label class="f"><span>Mica limit case (IS 383 Table 2 Note 3)</span><select name="{{ k }}_mica" id="m_{{ k }}"><option value="">— Select —</option>
+          {% for mk, (label, lim) in mica_bases.items() %}<option value="{{ mk }}" {% if form.get(k ~ '_mica') == mk %}selected{% endif %}>{{ label }} ({{ "%.2f"|format(lim) }} %)</option>{% endfor %}</select></label>
         <label class="check"><input type="checkbox" name="{{ k }}_frost" {% if form.get(k ~ '_frost') == 'on' %}checked{% endif %}> Exposed to frost</label>
       {% elif pr.set %}
         {% if pr.optional %}<label class="check"><input type="checkbox" name="{{ k }}_apply" id="a_{{ k }}" {% if form.get(k ~ '_apply') == 'on' %}checked{% endif %}> Apply the {{ SETS[pr.set].label }} test set</label>{% endif %}
@@ -63,7 +65,7 @@
     <p class="small muted" style="margin:10px 0 0">Aggregate test frequencies come from the BIS product manual for IS 383, which the manual calls recommendatory. All frequencies and limits can be changed afterwards per parameter. Chemical admixtures are product-specific: add each one (for example a Fosroc or Sika product) with "Add material" in the Admixture category, then apply the IS 9103 set with the manufacturer's stated values.</p>
   </div>
 
-  <div class="alert">Aggregate limits are from IS 383:2016 (Third Revision) base text; soft fragments, shale and mica have no limit filled in and need yours. {% include "_cement_note.html" %}</div>
+  <div class="alert">Aggregate limits are from IS 383:2016 (Third Revision) base text, Table 2 read from the BIS page image. Where Table 2 has no requirement for a type (for example shale in crushed stone sand, soft fragments in crushed coarse aggregate), that test is not added. {% include "_cement_note.html" %}</div>
   <div class="actions"><a class="btn" href="/setup">Cancel</a><button class="btn primary" type="submit">Create ticked materials</button></div>
 </form>
 

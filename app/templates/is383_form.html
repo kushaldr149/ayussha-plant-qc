@@ -12,6 +12,7 @@
     <label class="f"><span>Type of fine aggregate</span><select name="source" id="i_source">{% for s in o.fine_sources %}<option {% if q.get('source') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
     <label class="f"><span>Grading zone to check against (IS 383 Table 9)</span><select name="zone" id="i_zone">{% for z in o.zones %}<option {% if q.get('zone', 'Zone II') == z %}selected{% endif %}>{{ z }}</option>{% endfor %}</select>
       <span class="hint">Every test also shows which zones the grading actually falls in.</span></label>
+    <label class="f"><span>Mica limit case (IS 383 Table 2 Note 3)</span><select name="mica" id="i_mica"><option value="">— Select —</option>{% for k, (label, lim) in o.mica_bases.items() %}<option value="{{ k }}" {% if q.get('mica') == k %}selected{% endif %}>{{ label }} ({{ "%.2f"|format(lim) }} %)</option>{% endfor %}</select></label>
     {% else %}
     <label class="f"><span>Type of coarse aggregate</span><select name="source" id="i_source">{% for s in o.coarse_sources %}<option {% if q.get('source') == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
     <label class="f"><span>Nominal size and grading (IS 383 Table 7)</span><select name="grading" id="i_grading">{% for g in o.gradings %}<option {% if q.get('grading', 'Graded 20 mm') == g %}selected{% endif %}>{{ g }}</option>{% endfor %}</select></label>
@@ -26,7 +27,7 @@
 {% if preview %}
 <form method="post" action="/setup/materials/{{ m.id }}/is383" class="stack" style="display:grid;gap:14px">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  {% for k in ["source", "grading", "zone", "use", "m65", "frost"] %}{% if q.get(k) %}<input type="hidden" name="{{ k }}" value="{{ q.get(k) }}">{% endif %}{% endfor %}
+  {% for k in ["source", "grading", "zone", "use", "m65", "frost", "mica"] %}{% if q.get(k) %}<input type="hidden" name="{{ k }}" value="{{ q.get(k) }}">{% endif %}{% endfor %}
   <div class="tablewrap"><table class="data">
     <thead><tr><th>Group</th><th>Parameter</th><th>Limit</th><th>Method · IS 383 reference</th><th>Frequency</th><th>Worksheet</th><th></th></tr></thead>
     <tbody>
