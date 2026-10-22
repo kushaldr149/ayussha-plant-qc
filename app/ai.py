@@ -41,7 +41,8 @@ flow, temperatures and admixture doses; mixes with flagged bags; mixes with no c
 There are no limits for these in the data, so do not judge them against any limit.
 10. Strength tests: results below the acceptance values entered for the grade, and samples with no acceptance values.
 11. NCRs: open and overdue NCRs, and repeated sources.
-12. Data gaps: tests with values not entered, production records or bags without planned values or lot numbers.
+12. Sensors: readings outside the limits set for each sensor, grouped by sensor, with the limit and its source.
+13. Data gaps: tests with values not entered, production records or bags without planned values or lot numbers.
 
 Data (JSON):
 """

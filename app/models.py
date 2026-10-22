@@ -745,3 +745,80 @@ class SiteMixAdmixture(Base):
 
     mix: Mapped[SiteMix] = relationship(back_populates="admixtures")
     pack: Mapped[Pack] = relationship()
+
+
+# ---------------------------------------------------------------- sensors
+
+SENSOR_STAGES = [
+    "Raw material receipt and storage", "Coating (coarse aggregate)", "Grinding (cementitious)",
+    "Weighing and bag packing", "Bag storage and dispatch", "Mixer on wheels and site mixing", "Laboratory",
+    "Plant environment", "Other",
+]
+# Type -> what it is generally used for in a plant like this one (descriptive, no product claims).
+SENSOR_TYPES = {
+    "Photoelectric (presence / count)": "Detects an object by a light beam: bag at the filling spout, bags passing on a conveyor, truck in position.",
+    "Load cell / weighing": "Weight of material in a hopper, bag filler or on a platform.",
+    "Moisture (microwave)": "Moisture of sand and aggregates in bins, chutes or on belts.",
+    "Level, continuous (radar / ultrasonic)": "Material level in silos and bins.",
+    "Level switch (point)": "High or low level alarm in a silo or hopper.",
+    "Temperature": "Material, mill, bearing or air temperature.",
+    "Vibration": "Condition of motors, mills, fans and gearboxes.",
+    "Motor current / power": "Load on mixers, mills and conveyors.",
+    "Particle size (online laser diffraction)": "Fineness of ground material at the mill outlet.",
+    "Flow meter": "Quantity of water or admixture.",
+    "Drum rotation / slump (truck mixer)": "Drum revolutions, slump and concrete temperature in the mixer on wheels.",
+    "Concrete temperature / maturity": "Temperature history of placed concrete, for maturity-based strength estimates.",
+    "Dust / particulate": "Airborne dust near grinding and packing.",
+    "Humidity": "Air humidity in storage and the laboratory.",
+    "Barcode / QR scanner": "Reads bag labels at packing, dispatch and site.",
+    "GPS tracker": "Location of trucks and mixers on wheels.",
+    "Other": "",
+}
+SENSOR_OUTPUTS = ["4-20 mA analogue", "0-10 V analogue", "Digital on/off (PNP / NPN)", "IO-Link", "Modbus RTU (RS-485)",
+                  "Modbus TCP", "PROFINET", "EtherNet/IP", "OPC UA", "Wireless / mobile app", "Other"]
+SENSOR_STATUSES = ["In use", "Not installed yet", "Out of service", "Retired"]
+
+
+class Sensor(Base):
+    __tablename__ = "sensors"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tag: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    stage: Mapped[str] = mapped_column(String(80), index=True)
+    sensor_type: Mapped[str] = mapped_column(String(80))
+    parameter: Mapped[str] = mapped_column(String(120), default="")      # what it measures
+    unit: Mapped[str] = mapped_column(String(20), default="")
+    make: Mapped[str] = mapped_column(String(120), default="")
+    model: Mapped[str] = mapped_column(String(120), default="")
+    serial_no: Mapped[str] = mapped_column(String(80), default="")
+    range_text: Mapped[str] = mapped_column(String(120), default="")
+    accuracy_text: Mapped[str] = mapped_column(String(120), default="")
+    output: Mapped[str] = mapped_column(String(60), default="")
+    location: Mapped[str] = mapped_column(String(160), default="")
+    equipment_id: Mapped[int | None] = mapped_column(ForeignKey("equipment.id"), nullable=True)
+    low_limit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    high_limit: Mapped[float | None] = mapped_column(Float, nullable=True)
+    limit_source: Mapped[str] = mapped_column(String(200), default="")
+    status: Mapped[str] = mapped_column(String(30), default="In use")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    equipment: Mapped[Equipment | None] = relationship()
+    readings: Mapped[list["SensorReading"]] = relationship(back_populates="sensor", cascade="all, delete-orphan",
+                                                          order_by="SensorReading.taken_at.desc()")
+
+
+class SensorReading(Base):
+    __tablename__ = "sensor_readings"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sensor_id: Mapped[int] = mapped_column(ForeignKey("sensors.id", ondelete="CASCADE"), index=True)
+    taken_at: Mapped[datetime] = mapped_column(DateTime, index=True)     # UTC
+    value: Mapped[float] = mapped_column(Float)
+    result: Mapped[str] = mapped_column(String(10))                     # ok / low / high / nolimit
+    source: Mapped[str] = mapped_column(String(20), default="manual")   # manual / api
+    note: Mapped[str] = mapped_column(String(300), default="")
+    entered_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    sensor: Mapped[Sensor] = relationship(back_populates="readings")
+    entered_by: Mapped[User | None] = relationship()

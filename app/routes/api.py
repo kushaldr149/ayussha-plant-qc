@@ -45,6 +45,17 @@ class ProductionIn(BaseModel):
     components: list[ComponentIn]
 
 
+class SensorReadingIn(BaseModel):
+    tag: str = Field(description="Sensor tag exactly as in the Sensors register")
+    value: float
+    taken_at: str = Field(default="", description="ISO date-time in plant time, e.g. 2026-10-22T14:05:00; empty = now")
+    note: str = ""
+
+
+class SensorReadingsIn(BaseModel):
+    readings: list[SensorReadingIn]
+
+
 @router.get("/health")
 def health():
     return {"status": "ok"}
@@ -65,3 +76,34 @@ def post_production(body: ProductionIn, db: Session = Depends(get_db)):
         raise HTTPException(422, {"errors": e.messages})
     return {"id": rec.id, "record_no": rec.record_no, "status": rec.status, "max_abs_dev_pct": rec.max_abs_dev_pct,
             "lot_issue": rec.lot_issue}
+
+
+@router.post("/sensor-readings", dependencies=[Depends(check_token)])
+def post_sensor_readings(body: SensorReadingsIn, db: Session = Depends(get_db)):
+    """Save readings from a PLC, gateway or data logger. All readings are saved, or none if any is rejected."""
+    from sqlalchemy import func, select
+
+    from .. import audit
+    from .. import sensors as sn
+    from ..models import Sensor
+    if not body.readings:
+        raise HTTPException(422, {"errors": ["Send at least one reading."]})
+    if len(body.readings) > sn.MAX_API_READINGS:
+        raise HTTPException(422, {"errors": [f"Send at most {sn.MAX_API_READINGS} readings per call."]})
+    errors, saved = [], []
+    for i, r in enumerate(body.readings, start=1):
+        s = db.scalars(select(Sensor).where(func.lower(Sensor.tag) == r.tag.strip().lower())).first()
+        if not s:
+            errors.append(f"Reading {i}: no sensor with tag {r.tag}.")
+            continue
+        try:
+            saved.append((s, sn.add_reading(db, None, s, r.value, r.taken_at, r.note, source="api", commit=False)))
+        except services.ValidationError as e:
+            errors += [f"Reading {i} ({r.tag}): {m}" for m in e.messages]
+    if errors:
+        db.rollback()
+        raise HTTPException(422, {"errors": errors})
+    db.flush()
+    audit.record(db, None, "create", "sensor_reading", "api", {"count": len(saved)})
+    db.commit()
+    return {"saved": len(saved), "results": [{"tag": s.tag, "value": r.value, "result": r.result} for s, r in saved]}

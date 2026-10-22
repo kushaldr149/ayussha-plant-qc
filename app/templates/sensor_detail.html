@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ s.tag }}{% endblock %}
+{% block content %}
+{% macro rchip(r) -%}<span class="chip {{ {'ok': 'pass', 'low': 'fail', 'high': 'fail'}.get(r, 'info') }}">{{ labels[r] }}</span>{%- endmacro %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/sensors">Sensors</a> · {{ s.stage }}</p>
+<h1>{{ s.tag }} · {{ s.name }}</h1>
+<p class="muted">{{ s.sensor_type }}{% if s.parameter %} · {{ s.parameter }}{% endif %}{% if s.low_limit is not none or s.high_limit is not none %} · limits {{ limit_text(s.low_limit, s.high_limit, s.unit) }}{% if s.limit_source %} ({{ s.limit_source }}){% endif %}{% endif %}{% if s.equipment %} · calibration: <a href="/equipment/{{ s.equipment.id }}">{{ s.equipment.tag }}</a>{% endif %}</p></div></div>
+
+{% if can("sensors.reading") and s.status != "Retired" %}
+<form class="panel stack" method="post" action="/sensors/{{ s.id }}/reading" style="max-width:900px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <h2 style="margin:0">Add a reading</h2>
+  <div class="fgrid">
+    <label class="f"><span>Reading{% if s.unit %} ({{ s.unit }}){% endif %}</span><input name="value" id="r_value" inputmode="decimal" class="mono" required value="{{ rform.get('value', '') }}"></label>
+    <label class="f"><span>Time</span><input type="datetime-local" name="taken_at" id="r_time" value="{{ rform.get('taken_at', '') }}"><span class="hint">Leave empty for now.</span></label>
+    <label class="f wide"><span>Note</span><input name="note" id="r_note" value="{{ rform.get('note', '') }}" maxlength="300"></label>
+  </div>
+  <div class="actions"><button class="btn primary" type="submit">Save reading</button></div>
+</form>
+{% endif %}
+
+<div class="panel">
+  <h2>Readings <span class="muted small">(latest 200)</span></h2>
+  <div class="tablewrap" style="margin-top:8px"><table class="data">
+    <thead><tr><th>Time</th><th class="num">Value</th><th>Result</th><th>Source</th><th>Entered by</th><th>Note</th></tr></thead>
+    <tbody>{% for r in readings %}
+      <tr><td class="nowrap">{{ r.taken_at|dt }}</td><td class="num mono">{{ r.value|num }} {{ s.unit }}</td><td>{{ rchip(r.result) }}</td>
+        <td>{{ "Plant API" if r.source == "api" else "By hand" }}</td><td>{{ r.entered_by.display if r.entered_by else "—" }}</td><td class="small">{{ r.note or "" }}</td></tr>
+    {% else %}<tr><td colspan="6" class="empty">No readings yet.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+
+{% if can("sensors.write") %}
+<form class="panel stack" method="post" action="/sensors/{{ s.id }}" style="max-width:900px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <h2 style="margin:0">Sensor details</h2>
+  {% include "_sensor_fields.html" %}
+  <p class="small muted" style="margin:0">Changing a limit applies to new readings only; saved readings keep the result they were saved with.</p>
+  <div class="actions"><button class="btn primary" type="submit">Save changes</button></div>
+</form>
+{% endif %}
+{% endblock %}

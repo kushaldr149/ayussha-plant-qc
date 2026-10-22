@@ -23,7 +23,7 @@
   </div>
   <div class="wrap">
     <nav class="sections" aria-label="Sections">
-      {% set nav = [("/", "Overview"), ("/qc", "Material QC"), ("/production", "Production"), ("/process", "Plant process"), ("/dispatch", "Dispatch"), ("/strength", "Strength tests"), ("/stock", "Stock"), ("/ncr", "NCR"), ("/equipment", "Equipment"), ("/setup", "Setup")] %}
+      {% set nav = [("/", "Overview"), ("/qc", "Material QC"), ("/production", "Production"), ("/process", "Plant process"), ("/dispatch", "Dispatch"), ("/strength", "Strength tests"), ("/stock", "Stock"), ("/ncr", "NCR"), ("/equipment", "Equipment"), ("/sensors", "Sensors"), ("/setup", "Setup")] %}
       {% for href, label in nav %}
         <a href="{{ href }}" {% if (href == "/" and path == "/") or (href != "/" and (path.startswith(href) or (href == "/dispatch" and path.startswith("/orders")) or (href == "/process" and (path.startswith("/packs") or path.startswith("/site-mix"))))) %}aria-current="page"{% endif %}>{{ label }}</a>
       {% endfor %}

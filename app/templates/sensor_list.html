@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Sensors{% endblock %}
+{% block content %}
+{% macro rchip(r) -%}<span class="chip {{ {'ok': 'pass', 'low': 'fail', 'high': 'fail'}.get(r, 'info') }}">{{ labels[r] }}</span>{%- endmacro %}
+<div class="toolbar">
+  <div><h1>Sensors</h1><p class="muted">Sensors at each stage of the plant, with their latest reading. Readings are entered by hand or sent by the plant control system through the plant API.</p></div>
+  <div class="row">{% if can("sensors.write") %}<a class="btn primary" href="/sensors/new">Add sensor</a>{% endif %}</div>
+</div>
+{% for stage, rows in groups.items() %}
+<h2 style="margin:14px 0 6px">{{ stage }}</h2>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Tag</th><th>Sensor</th><th>Type</th><th>Measures</th><th>Limits</th><th>Latest reading</th><th>Outside limits, 24 h</th><th>Status</th></tr></thead>
+  <tbody>{% for s in rows %}{% set r = last.get(s.id) %}
+    <tr><td class="mono nowrap"><a class="rowlink" href="/sensors/{{ s.id }}">{{ s.tag }}</a></td>
+      <td>{{ s.name }}{% if s.make or s.model %}<div class="muted small">{{ s.make }} {{ s.model }}</div>{% endif %}</td>
+      <td class="small">{{ s.sensor_type }}</td><td class="small">{{ s.parameter or "—" }}</td>
+      <td class="mono nowrap">{{ limit_text(s.low_limit, s.high_limit, s.unit) if (s.low_limit is not none or s.high_limit is not none) else "—" }}</td>
+      <td class="nowrap">{% if r %}<span class="mono">{{ r.value|num }} {{ s.unit }}</span> {{ rchip(r.result) }}<div class="muted small">{{ r.taken_at|dt }}</div>{% else %}<span class="muted">None yet</span>{% endif %}</td>
+      <td class="num">{% if out24.get(s.id) %}<span class="chip fail">{{ out24[s.id] }}</span>{% else %}0{% endif %}</td>
+      <td><span class="chip {{ {'In use': 'pass', 'Out of service': 'fail'}.get(s.status, 'info') }}">{{ s.status }}</span></td></tr>
+  {% endfor %}</tbody></table></div>
+{% else %}
+<div class="panel"><p style="margin:0"><strong>No sensors yet.</strong> Add each sensor with the plant stage it serves.</p></div>
+{% endfor %}
+<div class="panel">
+  <h2>Sensor types you can register</h2>
+  <div class="tablewrap" style="margin-top:8px"><table class="data">
+    <thead><tr><th>Type</th><th>Typical use in this plant</th>{% if can("sensors.write") %}<th></th>{% endif %}</tr></thead>
+    <tbody>{% for t, use in types.items() if t != "Other" %}<tr><td>{{ t }}</td><td class="small">{{ use }}</td>{% if can("sensors.write") %}<td><a class="small" href="/sensors/new?sensor_type={{ t|urlencode }}">Add</a></td>{% endif %}</tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+<div class="panel">
+  <h2>Sending readings from the plant system</h2>
+  <p class="small" style="margin:6px 0 0">The plant API must be switched on (PLANT_API_TOKEN in the .env file). A PLC, gateway or data logger then sends <span class="mono">POST /api/v1/sensor-readings</span> with the header <span class="mono">Authorization: Bearer &lt;token&gt;</span> and a body such as <span class="mono">{"readings": [{"tag": "AG-MW-01", "value": 4.2}]}</span>. Readings are checked against each sensor's limits when saved. Field details are on <a href="/api/docs" target="_blank" rel="noopener">/api/docs</a>.</p>
+</div>
+{% endblock %}

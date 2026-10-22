@@ -90,9 +90,12 @@ async def ai_run(request: Request, db: Session = Depends(get_db), user: User = D
     data.update(_ops.review_extra(db, start, end, config.AI_MAX_RECORDS))
     from .. import process as _proc
     data.update(_proc.review_data(db, start, end, config.AI_MAX_RECORDS))
+    from .. import sensors as _sn
+    data.update(_sn.review_data(db, start, end, config.AI_MAX_RECORDS))
     qn, pn = len(data["material_tests"]), len(data["production_records"])
     if not any(data.get(k) for k in ("material_tests", "production_records", "dispatches", "strength_samples", "ncrs",
-                                     "coating_batches", "grinding_batches", "bags", "site_mixes")):
+                                     "coating_batches", "grinding_batches", "bags", "site_mixes",
+                                     "sensor_readings_outside_limits")):
         flash(request, "There are no records in this period to review.", "warn")
         return redirect(f"/ai?from={start}&to={end}")
     try:

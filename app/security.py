@@ -39,6 +39,8 @@ PERMISSIONS = {
     "process.write": {"admin", "qc", "operator"},   # coating, grinding, packing
     "process.decide": {"admin", "qc"},               # decision on coating/grinding output lots
     "sitemix.write": {"admin", "qc", "operator"},
+    "sensors.write": {"admin", "qc"},                # sensor register and limits
+    "sensors.reading": {"admin", "qc", "operator"},  # enter readings by hand
 }
 
 

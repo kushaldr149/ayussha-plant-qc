@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Add sensor{% endblock %}
+{% block content %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/sensors">Sensors</a></p><h1>Add sensor</h1>
+<p class="muted">Enter the details from the sensor's datasheet. Limits are optional; enter them only from a standard, the supplier's datasheet or your in-house specification.</p></div></div>
+<form class="panel stack" method="post" action="/sensors/new" style="max-width:900px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {% include "_sensor_fields.html" %}
+  <div class="actions"><a class="btn" href="/sensors">Cancel</a><button class="btn primary" type="submit">Save sensor</button></div>
+</form>
+{% endblock %}

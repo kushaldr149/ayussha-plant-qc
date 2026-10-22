@@ -1,0 +1,23 @@
+{% set v = form if form else {} %}
+{% macro val(k, default='') -%}{{ v.get(k, (s[k] if s and s[k] is not none else default)) }}{%- endmacro %}
+<div class="fgrid">
+  <label class="f"><span>Sensor tag</span><input name="tag" id="s_tag" class="mono" required value="{{ val('tag') }}" placeholder="e.g. PK-PE-01"></label>
+  <label class="f"><span>Name</span><input name="name" id="s_name" required value="{{ val('name') }}" placeholder="e.g. Bag at filling spout, line 1"></label>
+  <label class="f"><span>Plant stage</span><select name="stage" id="s_stage"><option value="">— Select —</option>{% set cur = val('stage') %}{% for st in stages %}<option {% if st == cur %}selected{% endif %}>{{ st }}</option>{% endfor %}</select></label>
+  <label class="f"><span>Sensor type</span><select name="sensor_type" id="s_type"><option value="">— Select —</option>{% set cur = val('sensor_type') %}{% for t, use in types.items() %}<option {% if t == cur %}selected{% endif %} title="{{ use }}">{{ t }}</option>{% endfor %}</select></label>
+  <label class="f"><span>What it measures</span><input name="parameter" id="s_param" value="{{ val('parameter') }}" placeholder="e.g. Moisture of M-sand, bag present (1/0)"></label>
+  <label class="f"><span>Unit</span><input name="unit" id="s_unit" class="mono" value="{{ val('unit') }}" placeholder="% · kg · °C · mm/s · 1/0"></label>
+  <label class="f"><span>Make</span><input name="make" id="s_make" value="{{ val('make') }}"></label>
+  <label class="f"><span>Model</span><input name="model" id="s_model" value="{{ val('model') }}"></label>
+  <label class="f"><span>Serial no.</span><input name="serial_no" id="s_serial" class="mono" value="{{ val('serial_no') }}"></label>
+  <label class="f"><span>Measuring range (from datasheet)</span><input name="range_text" id="s_range" value="{{ val('range_text') }}"></label>
+  <label class="f"><span>Accuracy (from datasheet)</span><input name="accuracy_text" id="s_acc" value="{{ val('accuracy_text') }}"></label>
+  <label class="f"><span>Output / interface</span><select name="output" id="s_out"><option value="">— Select —</option>{% set cur = val('output') %}{% for o in outputs %}<option {% if o == cur %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></label>
+  <label class="f"><span>Location in the plant</span><input name="location" id="s_loc" value="{{ val('location') }}"></label>
+  <label class="f"><span>Calibration record (Equipment)</span><select name="equipment_id" id="s_eq"><option value="">None</option>{% set cur = v.get('equipment_id', s.equipment_id if s and s.equipment_id else '')|string %}{% for e in equipment %}<option value="{{ e.id }}" {% if e.id|string == cur %}selected{% endif %}>{{ e.tag }} · {{ e.name }}</option>{% endfor %}</select><span class="hint">Link it to an Equipment item to track calibration due dates.</span></label>
+  <label class="f"><span>Status</span><select name="status" id="s_status">{% set cur = val('status', 'In use') %}{% for st in statuses %}<option {% if st == cur %}selected{% endif %}>{{ st }}</option>{% endfor %}</select></label>
+  <label class="f"><span>Low limit</span><input name="low_limit" id="s_low" inputmode="decimal" class="mono" value="{{ val('low_limit') }}"></label>
+  <label class="f"><span>High limit</span><input name="high_limit" id="s_high" inputmode="decimal" class="mono" value="{{ val('high_limit') }}"><span class="hint">Leave both limits empty if there is no specification; readings are then recorded without a check.</span></label>
+  <label class="f wide"><span>Source of the limits</span><input name="limit_source" id="s_lsrc" value="{{ val('limit_source') }}" placeholder="Standard and clause, datasheet, or in-house specification"></label>
+  <label class="f wide"><span>Notes</span><textarea name="notes" id="s_notes" rows="2">{{ val('notes') }}</textarea></label>
+</div>
