@@ -160,16 +160,30 @@ def save_process_batch(db: Session, user: User, kind: str, form) -> ProcessBatch
     if errors:
         raise ValidationError(errors)
 
-    coating_pct = None
+    coating_pct = target = dev = tol = cstatus = None
     if kind == "coating":
         agg = sum(logic.convert(r[5], r[6], "kg") for r in rows if r[0] == "aggregate")
         coat = sum(logic.convert(r[5], r[6], "kg") for r in rows if r[0] == "coating")
         coating_pct = round(coat / agg * 100, 3) if agg else None
+        target = out_mat.coating_target_pct
+        if target is None:
+            cstatus = "notarget"
+        elif agg:
+            settings = get_settings(db)
+            tols = [t for t in (settings.tolerance_for(r[1].category) for r in rows if r[0] == "coating") if t is not None]
+            tol = min(tols) if tols else None
+            dev = logic.deviation_pct(target / 100 * agg, coat)
+            cstatus, _ = logic.item_status([(dev, tol)])
+            if cstatus == "over" and not remarks:
+                raise ValidationError([
+                    f"Coating dosage is {coating_pct:.3f} % of the aggregate mass; the target for {out_mat.name} is "
+                    f"{target:g} % (coating mass {dev:+.2f} % from target, tolerance ± {tol:g} %). Add a remark to save it."])
     prefix = {"coating": "CB", "grinding": "GB"}[kind]
     b = ProcessBatch(batch_no=_next_no(db, ProcessBatch.batch_no, f"{prefix}-{bdate:%Y%m%d}-", 3), kind=kind,
                      batch_date=bdate, shift=_s(form, "shift"), equipment_id=eq.id if eq else None,
                      output_material_id=out_mat.id, output_material_name=out_mat.name, output_qty=out_qty,
                      output_unit=out_unit, coating_pct=coating_pct, blaine_m2kg=blaine, residue45_pct=residue,
+                     coating_target_pct=target, coating_dev_pct=dev, coating_tol_pct=tol, coating_status=cstatus,
                      lot_issue=lot_issue, decision="On hold", remarks=remarks, created_by_id=user.id,
                      inputs=[ProcessInput(role=r[0], material_id=r[1].id, material_name=r[1].name, lot_no=r[2],
                                           lot_decision=r[3], lot_test_id=r[4], qty=r[5], unit=r[6]) for r in rows])
@@ -470,7 +484,12 @@ def review_data(db: Session, date_from, date_to, limit: int) -> dict:
                            "lot_decision": i.lot_decision or "no QC record", "qty": i.qty, "unit": i.unit}
                           for i in b.inputs]}
         if b.kind == "coating":
-            row["coating_pct_entered"] = b.coating_pct
+            row["coating_pct_of_aggregate_mass"] = b.coating_pct
+            row["coating_target_pct"] = b.coating_target_pct
+            row["coating_mass_deviation_from_target_pct"] = _num(b.coating_dev_pct)
+            row["coating_tolerance_pct"] = b.coating_tol_pct
+            row["coating_check"] = {"ok": "within tolerance", "over": "outside tolerance", "notol": "no tolerance set",
+                                    "notarget": "no target set for this coated material"}.get(b.coating_status or "", None)
         else:
             row["blaine_m2_per_kg_entered"] = b.blaine_m2kg
             row["residue_45_micron_pct_entered"] = b.residue45_pct

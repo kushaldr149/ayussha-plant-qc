@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import dec_chip, res_chip, pack_chip %}
+{% from "_macros.html" import dec_chip, res_chip, pack_chip, prod_chip %}
 {% block title %}{{ b.batch_no }}{% endblock %}
 {% block content %}
 <div class="toolbar"><div><p class="muted mono" style="margin:0"><a href="/process">Plant process</a> · <a href="/process/{{ b.kind }}">{{ PROCESS_KINDS[b.kind] }} batches</a> · {{ b.batch_no }}</p><h1>{{ PROCESS_KINDS[b.kind] }}: {{ b.output_material_name }}</h1></div>
@@ -9,7 +9,8 @@
     <dt>Batch date</dt><dd>{{ b.batch_date|d }}{% if b.shift %} · {{ b.shift }}{% endif %}</dd>
     <dt>Output lot no.</dt><dd class="mono">{{ b.output_lot_no }}</dd>
     <dt>Output</dt><dd>{{ b.output_material_name }}{% if b.output_qty is not none %} · <span class="mono">{{ b.output_qty|num }} {{ b.output_unit }}</span>{% endif %}</dd>
-    {% if b.kind == "coating" %}<dt>Coating dosage</dt><dd class="mono">{% if b.coating_pct is not none %}{{ "%.3f"|format(b.coating_pct) }} % of aggregate mass{% else %}—{% endif %}</dd>{% endif %}
+    {% if b.kind == "coating" %}<dt>Coating dosage</dt><dd class="mono">{% if b.coating_pct is not none %}{{ "%.3f"|format(b.coating_pct) }} % of aggregate mass{% else %}—{% endif %}</dd>
+    <dt>Coating check</dt><dd>{% if b.coating_status == "notarget" or (b.coating_status is none) %}<span class="muted">No target set for {{ b.output_material_name }} when saved</span>{% else %}{{ prod_chip(b.coating_status) }} <span class="muted small">target {{ b.coating_target_pct|num }} %{% if b.coating_dev_pct is not none %}, coating mass {{ "%+.2f"|format(b.coating_dev_pct) }} % from target{% endif %}{% if b.coating_tol_pct is not none %}, tolerance ± {{ b.coating_tol_pct|num }} %{% endif %}</span>{% endif %}</dd>{% endif %}
     {% if b.kind == "grinding" %}<dt>Blaine fineness</dt><dd class="mono">{{ (b.blaine_m2kg|num ~ " m²/kg") if b.blaine_m2kg is not none else "—" }}</dd>
     <dt>Residue on 45 µm</dt><dd class="mono">{{ (b.residue45_pct|num ~ " %") if b.residue45_pct is not none else "—" }}</dd>{% endif %}
     <dt>Equipment</dt><dd>{{ (b.equipment.tag ~ " · " ~ b.equipment.name) if b.equipment else "—" }}</dd>

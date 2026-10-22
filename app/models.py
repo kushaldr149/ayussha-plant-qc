@@ -124,6 +124,8 @@ class Material(Base):
     # Stock is kept in this unit; quantities in other units of the same kind are converted (kg/t, mL/L).
     stock_unit: Mapped[str | None] = mapped_column(String(20), nullable=True, default="kg")
     reorder_level: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Coated aggregate only: coating material dosage target, % of the aggregate mass coated.
+    coating_target_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     parameters: Mapped[list["QCParameter"]] = relationship(
         back_populates="material", order_by="QCParameter.sort_order, QCParameter.id"
@@ -611,6 +613,12 @@ class ProcessBatch(Base):
     coating_pct: Mapped[float | None] = mapped_column(Float, nullable=True)   # coating mass / aggregate mass × 100
     blaine_m2kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     residue45_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Coating check, fixed when the batch is saved: target of the output material, deviation of the coating
+    # mass from target % × aggregate mass, and the batching tolerance of the coating material's category.
+    coating_target_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coating_dev_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coating_tol_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coating_status: Mapped[str | None] = mapped_column(String(20), nullable=True)   # ok / over / notol / notarget
     lot_issue: Mapped[bool] = mapped_column(Boolean, default=False)
     decision: Mapped[str] = mapped_column(String(30), default="On hold", index=True)
     decision_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)

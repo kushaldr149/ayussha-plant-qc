@@ -103,6 +103,9 @@ async def material_save(request: Request, mid: int | None = None, db: Session = 
     if stock_unit not in UNITS:
         errors.append("Select a stock unit.")
     reorder = services.parse_num(form.get("reorder_level"), "Reorder level", errors)
+    ctarget = services.parse_num(form.get("coating_target_pct"), "Coating dosage target", errors)
+    if ctarget is not None and not 0 < ctarget < 100:
+        errors.append("Coating dosage target must be more than 0 and less than 100 %.")
     dup = db.scalars(select(Material).where(func.lower(Material.name) == name.lower())).first()
     if dup and (not m or dup.id != m.id):
         errors.append("A material with this name already exists.")
@@ -116,9 +119,13 @@ async def material_save(request: Request, mid: int | None = None, db: Session = 
     m.supplier = str(form.get("supplier", "")).strip()
     m.notes = str(form.get("notes", "")).strip()
     m.stock_unit, m.reorder_level = stock_unit, reorder
+    before_target = m.coating_target_pct
+    m.coating_target_pct = ctarget if category == "Coated aggregate" else None
     m.active = form.get("active") == "on" if not is_new else True
     db.flush()
-    audit.record(db, user, "create" if is_new else "update", "material", m.id, {"name": name, "category": category})
+    audit.record(db, user, "create" if is_new else "update", "material", m.id, {
+        "name": name, "category": category,
+        **({"coating_target_pct": [before_target, m.coating_target_pct]} if before_target != m.coating_target_pct else {})})
     db.commit()
     flash(request, f"Material {name} saved.")
     return redirect("/setup#materials")

@@ -4,7 +4,7 @@
     <tr><td class="mono"><a class="rowlink" href="/process/batches/{{ b.id }}">{{ b.batch_no }}</a></td><td class="nowrap">{{ b.batch_date|d }}</td>
       <td class="small">{% for i in b.inputs if i.role == "aggregate" %}{{ i.material_name }} · {{ i.lot_no or "—" }} · {{ i.qty|num }} {{ i.unit }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
       <td class="small">{% for i in b.inputs if i.role == "coating" %}{{ i.material_name }} · {{ i.lot_no or "—" }} · {{ i.qty|num }} {{ i.unit }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
-      <td class="num mono">{{ ("%.2f"|format(b.coating_pct) ~ " %") if b.coating_pct is not none else "—" }}</td>
+      <td class="num mono">{{ ("%.3f"|format(b.coating_pct) ~ " %") if b.coating_pct is not none else "—" }}{% if b.coating_target_pct is not none %}<div class="small">target {{ b.coating_target_pct|num }} %</div>{% endif %}{% if b.coating_status in ("ok", "over") %}<div>{{ prod_chip(b.coating_status) }}</div>{% endif %}</td>
       <td>{{ b.output_material_name }}{% if b.output_qty is not none %}<div class="muted small mono">{{ b.output_qty|num }} {{ b.output_unit }}</div>{% endif %}</td>
       <td>{{ dec_chip(b.decision) }}{% if b.lot_issue %}<div style="margin-top:4px"><span class="chip hold">Lot not accepted</span></div>{% endif %}</td></tr>
   {% else %}<tr><td colspan="7" class="empty">No coating batches yet.</td></tr>{% endfor %}</tbody></table></div>

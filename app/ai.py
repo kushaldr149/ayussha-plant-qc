@@ -28,8 +28,8 @@ and status, bags outside batching tolerance, production records, dispatches, sit
 2. Out-of-limit results, grouped by material and supplier, with the parameter, value and limit.
 3. Repeated issues: the same material, supplier or parameter out of limit more than once.
 4. Coating and grinding batches: batches on hold or rejected, batches that used lots not accepted or with no QC record, \
-batches with no QC test linked, and batches where coating % or fineness was not entered. Report entered values as given; \
-the data has no target values for them.
+batches with no QC test linked, and coating batches outside the coating dosage target or with no target \
+(coating_check). Grinding fineness has no target in the data; report it as given.
 5. Bags: bags outside the batching tolerance (with material, planned, actual and deviation), bags with no tolerance or \
 planned quantities, bags packed from lots not accepted or from batches not accepted, and flagged bags that were \
 dispatched or used at site.

@@ -13,6 +13,8 @@
     {% set su = v.get('stock_unit', (m.stock_unit or 'kg') if m else 'kg') %}
     <label class="f"><span>Stock unit</span><select name="stock_unit" id="m_unit">{% for u in UNITS %}<option {% if u == su %}selected{% endif %}>{{ u }}</option>{% endfor %}</select><span class="hint">kg and t convert to each other, as do L and mL.</span></label>
     <label class="f"><span>Reorder level (in stock unit)</span><input name="reorder_level" id="m_reorder" inputmode="decimal" class="mono" value="{{ v.get('reorder_level', m.reorder_level if m and m.reorder_level is not none else '') }}"></label>
+    <label class="f" id="m_ctarget_wrap"><span>Coating dosage target (% of aggregate mass)</span><input name="coating_target_pct" id="m_ctarget" inputmode="decimal" class="mono" value="{{ v.get('coating_target_pct', m.coating_target_pct if m and m.coating_target_pct is not none else '') }}">
+      <span class="hint">Coated aggregate only. Each coating batch for this material checks the coating mass against target × aggregate mass, within the Coating material batching tolerance (Plant settings).</span></label>
     <label class="f wide"><span>Notes</span><textarea name="notes" id="m_notes" rows="2">{{ v.get('notes', m.notes if m else '') }}</textarea></label>
     {% if m %}<label class="check"><input type="checkbox" name="active" id="m_active" {% if m.active %}checked{% endif %}> Active (inactive materials are hidden from new tests and records)</label>{% endif %}
   </div>

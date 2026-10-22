@@ -125,7 +125,37 @@ def test_plant_flow(admin):
     with SessionLocal() as db:
         b = db.get(ProcessBatch, coat_id)
         assert b.decision == "On hold" and b.coating_pct == 2.0 and b.output_lot_no == b.batch_no
-        assert b.batch_no.startswith("CB-")
+        assert b.batch_no.startswith("CB-") and b.coating_status == "notarget"
+
+    # ---- coating target 0.5 % of aggregate mass, checked within the Coating material tolerance (2 % here)
+    admin.get(f"/setup/materials/{mats['P Coated 20']}")
+    with SessionLocal() as db:
+        cm = db.get(Material, mats["P Coated 20"])
+        form = {"name": cm.name, "category": cm.category, "stock_unit": cm.stock_unit or "kg", "active": "on"}
+    r = admin.post(f"/setup/materials/{mats['P Coated 20']}", {**form, "coating_target_pct": "0.5"})
+    assert r.status_code == 303
+    page = admin.get("/process/coating/new").text
+    assert "coating target 0.5 %" in page
+    base = {"batch_date": TODAY, "output_material_id": mats["P Coated 20"],
+            "in-0-role": "aggregate", "in-0-lot": f"qc:{lots['P 20 mm']}", "in-0-qty": "1", "in-0-unit": "t",
+            "in-1-role": "coating", "in-1-lot": f"qc:{lots['P Microsilica']}", "in-1-unit": "kg"}
+    r = admin.post("/process/coating/new", {**base, "in-1-qty": "5.05"})            # +1 %: within ± 2 %
+    ok_id = _new_id(r, "/process/batches")
+    admin.get("/process/coating/new")
+    r = admin.post("/process/coating/new", {**base, "in-1-qty": "5.5"})             # +10 %: needs a remark
+    assert r.status_code == 400 and "target for P Coated 20 is 0.5 %" in r.text and "Add a remark" in r.text
+    r = admin.post("/process/coating/new", {**base, "in-1-qty": "5.5", "remarks": "Trial dosage"})
+    over_id = _new_id(r, "/process/batches")
+    with SessionLocal() as db:
+        ok, over = db.get(ProcessBatch, ok_id), db.get(ProcessBatch, over_id)
+        assert ok.coating_status == "ok" and ok.coating_target_pct == 0.5 and round(ok.coating_dev_pct, 2) == 1.0
+        assert ok.coating_tol_pct == 2.0 and over.coating_status == "over" and round(over.coating_dev_pct, 2) == 10.0
+        d = process.review_data(db, date(2000, 1, 1), date(2100, 1, 1), 500)
+        row = next(x for x in d["coating_batches"] if x["batch_no"] == over.batch_no)
+        assert row["coating_check"] == "outside tolerance" and row["coating_target_pct"] == 0.5
+    page = admin.get(f"/process/batches/{over_id}").text
+    assert "target 0.5 %" in page and "+10.00 % from target" in page
+    assert admin.get("/process/coating").status_code == 200
 
     # a coating batch needs both an aggregate and a coating lot
     r = admin.post("/process/coating/new", {
@@ -203,7 +233,7 @@ def test_plant_flow(admin):
     with SessionLocal() as db:
         st = {ms.material.name: ms for ms in ops.raw_stock(db)}
         coat_no = db.get(ProcessBatch, coat_id).batch_no.lower()
-    assert st["P 20 mm"].lots["l20"].used == 1000
+    assert st["P 20 mm"].lots["l20"].used == 3000   # three coating batches of 1 t each
     assert st["P Coated 20"].lots[coat_no].received == 1020 and st["P Coated 20"].lots[coat_no].used == 1810
     assert st["P GGBS"].lots["lgg"].used == 500
 
@@ -269,7 +299,7 @@ def test_plant_flow(admin):
         d = process.review_data(db, _d(2000, 1, 1), _d(2100, 1, 1), 500)
     assert coat_no in [b["batch_no"] for b in d["coating_batches"]]
     assert grind_no in [b["batch_no"] for b in d["grinding_batches"]]
-    assert "coating_pct_entered" in d["coating_batches"][0] and "blaine_m2_per_kg_entered" in d["grinding_batches"][0]
+    assert "coating_pct_of_aggregate_mass" in d["coating_batches"][0] and "blaine_m2_per_kg_entered" in d["grinding_batches"][0]
     mix = next(m for m in d["site_mixes"] if m["water_l"] == 160)
     assert mix["water_binder_ratio"] == 0.4 and mix["admixture_doses"][0]["dose"] == 3
     cem = next(b for b in d["bags"] if b["kind"] == "Cementitious jumbo bag" and b["status"] == "Used at site")

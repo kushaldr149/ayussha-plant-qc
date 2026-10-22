@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import dec_chip %}
+{% from "_macros.html" import dec_chip, prod_chip %}
 {% set title = "Coating batches · coarse aggregate" if kind == "coating" else "Grinding batches · cementitious materials" %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
