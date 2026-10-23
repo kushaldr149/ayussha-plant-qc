@@ -83,7 +83,8 @@ async def sensor_reading(sid: int, request: Request, db: Session = Depends(get_d
     s = _get(db, sid)
     form = await request.form()
     try:
-        r = sn.add_reading(db, user, s, form.get("value"), form.get("taken_at"), str(form.get("note", "")))
+        r = sn.add_reading(db, user, s, form.get("value"), form.get("taken_at"), str(form.get("note", "")),
+                           ref=str(form.get("ref", "")))
     except ValidationError as e:
         db.rollback()
         return render(request, db, user, "sensor_detail.html", status_code=400, s=s, readings=s.readings[:200],

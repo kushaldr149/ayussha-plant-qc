@@ -614,3 +614,41 @@ async def presets_apply(request: Request, db: Session = Depends(get_db), user: U
     db.commit()
     flash(request, "Materials set up: " + "; ".join(done) + ".")
     return redirect("/setup#materials")
+
+
+# ---------------------------------------------------------------- durability targets
+
+@router.get("/durability-targets")
+def dtargets_page(request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+    from ..models import DURABILITY_TESTS, DurabilityTarget
+    rows = db.scalars(select(DurabilityTarget).order_by(DurabilityTarget.test_type, DurabilityTarget.product_line)).all()
+    return render(request, db, user, "durability_targets.html", rows=rows, tests=DURABILITY_TESTS, form={},
+                  lines=services.get_settings(db).product_line_list)
+
+
+@router.post("/durability-targets")
+async def dtargets_add(request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+    from .. import durability as du
+    from ..models import DURABILITY_TESTS, DurabilityTarget
+    form = await request.form()
+    try:
+        du.save_target(db, user, form)
+    except services.ValidationError as e:
+        db.rollback()
+        rows = db.scalars(select(DurabilityTarget).order_by(DurabilityTarget.test_type, DurabilityTarget.product_line)).all()
+        return render(request, db, user, "durability_targets.html", status_code=400, rows=rows, tests=DURABILITY_TESTS,
+                      form=form, errors=e.messages, lines=services.get_settings(db).product_line_list)
+    flash(request, "Durability target saved.")
+    return redirect("/setup/durability-targets")
+
+
+@router.post("/durability-targets/{tid}/delete")
+def dtargets_delete(tid: int, request: Request, db: Session = Depends(get_db), user: User = Depends(require("setup.write"))):
+    from ..models import DurabilityTarget
+    t = db.get(DurabilityTarget, tid) or _404()
+    audit.record(db, user, "delete", "durability_target", t.id,
+                 {"test": t.test_type, "line": t.product_line or "all", "min": t.min_value, "max": t.max_value})
+    db.delete(t)
+    db.commit()
+    flash(request, "Durability target deleted. Results already saved keep the target they were checked against.")
+    return redirect("/setup/durability-targets")

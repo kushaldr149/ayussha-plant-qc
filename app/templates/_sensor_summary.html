@@ -1,0 +1,13 @@
+<div class="panel">
+  <h2 style="margin-bottom:8px">Sensor readings</h2>
+  {% if sensor_rows %}
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Sensor</th><th>Measures</th><th class="num">Readings</th><th class="num">Min</th><th class="num">Mean</th><th class="num">Max</th><th>Outside limits</th><th>Matched by</th></tr></thead>
+    <tbody>{% for d in sensor_rows %}{% set s = d.sensor %}
+      <tr><td class="mono"><a href="/sensors/{{ s.id }}">{{ s.tag }}</a><div class="muted small">{{ s.name }}</div></td><td class="small">{{ s.parameter or s.sensor_type }}</td>
+        <td class="num">{{ d.n }}</td><td class="num mono">{{ d.min|num }}</td><td class="num mono">{{ d.mean|num }}</td><td class="num mono">{{ d.max|num }} {{ s.unit }}</td>
+        <td>{% if d.outside %}<span class="chip fail">{{ d.outside }}</span>{% else %}0{% endif %}</td>
+        <td class="small">{% if d.by_ref %}{{ d.by_ref }} sent with this number{% endif %}{% if d.by_ref and d.by_time %}; {% endif %}{% if d.by_time %}{{ d.by_time }} by time{% endif %}</td></tr>
+    {% endfor %}</tbody></table></div>
+  {% else %}<p class="muted" style="margin:0">No sensor readings are attached. Readings are attached when they are sent with this record's number, or when the record has start and finish times and a sensor at this plant stage has readings in between.</p>{% endif %}
+</div>

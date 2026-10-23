@@ -77,5 +77,37 @@
   <div class="actions"><button class="btn primary" type="submit">Save results</button></div>
 </form>
 {% endif %}
+<div class="panel" id="durability">
+  <h2>Durability tests</h2>
+  <p class="muted small" style="margin:4px 0 8px">Tests on specimens from this sample. {% if dline %}Product line: {{ dline }}. {% endif %}Each result is checked against the target set in Setup → Durability targets, if one exists.</p>
+  <div class="tablewrap"><table class="data">
+    <thead><tr><th>Test</th><th>Method</th><th class="num">Age</th><th>Tested</th><th>Specimen values</th><th class="num">Mean</th><th>Target</th><th>Result</th><th>Lab</th></tr></thead>
+    <tbody>{% for d in dura %}
+      <tr><td>{{ d.test_name }}</td><td class="small">{{ d.method }}</td><td class="num">{{ (d.age_days ~ " d") if d.age_days is not none else "—" }}</td><td class="nowrap">{{ d.test_date|d }}</td>
+        <td class="mono small">{{ d.values_text }}</td><td class="num mono">{{ d.mean_value|num }} {{ d.unit }}</td>
+        <td class="mono small">{% if d.target_min is not none or d.target_max is not none %}{{ limit_text(d.target_min, d.target_max, d.unit) }}{% if d.target_source %}<div class="muted">{{ d.target_source }}</div>{% endif %}{% else %}—{% endif %}</td>
+        <td><span class="chip {{ {'pass': 'pass', 'fail': 'fail'}.get(d.result, 'info') }}">{{ dlabels[d.result] }}</span></td><td class="small">{{ d.lab or "—" }}</td></tr>
+    {% else %}<tr><td colspan="9" class="empty">No durability tests recorded.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% if can("strength.write") %}
+{% set dv = dform %}
+<form class="panel stack" method="post" action="/strength/{{ s.id }}/durability" id="dura-form">
+  <h2>Add a durability result</h2>
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="fgrid">
+    <label class="f"><span>Test</span><select name="test_type" id="d_type"><option value="">— Select —</option>{% for k, (name, unit, method) in DTESTS.items() %}<option value="{{ k }}" {% if dv.get('test_type') == k %}selected{% endif %}>{{ name }}{% if unit %} ({{ unit }}){% endif %} · {{ method }}{% if dtargets.get(k) %} · target {{ limit_text(dtargets[k].min_value, dtargets[k].max_value, unit) }}{% endif %}</option>{% endfor %}</select></label>
+    <label class="f"><span>Age at test (days)</span><input name="age_days" id="d_age" inputmode="numeric" class="mono" value="{{ dv.get('age_days', '') }}"></label>
+    <label class="f"><span>Test date</span><input type="date" name="test_date" id="d_date" required value="{{ dv.get('test_date') or today }}"></label>
+    <label class="f"><span>Specimen values</span><input name="values" id="d_values" class="mono" required value="{{ dv.get('values', '') }}" placeholder="e.g. 120, 135, 128"><span class="hint">Separate values with commas. The mean is calculated.</span></label>
+    <label class="f"><span>Laboratory</span><input name="lab" id="d_lab" value="{{ dv.get('lab', '') }}"></label>
+    <label class="f"><span>For "Other": test name</span><input name="other_name" id="d_oname" value="{{ dv.get('other_name', '') }}"></label>
+    <label class="f"><span>For "Other": unit</span><input name="other_unit" id="d_ounit" value="{{ dv.get('other_unit', '') }}"></label>
+    <label class="f"><span>For "Other": method</span><input name="other_method" id="d_ometh" value="{{ dv.get('other_method', '') }}"></label>
+    <label class="f wide"><span>Remarks</span><input name="remarks" id="d_rem" value="{{ dv.get('remarks', '') }}"></label>
+  </div>
+  <div class="actions"><button class="btn primary" type="submit">Save durability result</button></div>
+</form>
+{% endif %}
 {% if ncrs %}<div class="panel"><h2>NCRs</h2><ul class="alist">{% for n in ncrs %}<li><a href="/ncr/{{ n.id }}"><span class="mono">{{ n.ncr_no }}</span><span class="t">{{ n.title }}</span><span class="d">{{ n.status }}</span></a></li>{% endfor %}</ul></div>{% endif %}
 {% endblock %}

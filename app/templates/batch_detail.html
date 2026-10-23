@@ -14,6 +14,7 @@
     {% if b.kind == "grinding" %}<dt>Blaine fineness</dt><dd class="mono">{{ (b.blaine_m2kg|num ~ " m²/kg") if b.blaine_m2kg is not none else "—" }}</dd>
     <dt>Residue on 45 µm</dt><dd class="mono">{{ (b.residue45_pct|num ~ " %") if b.residue45_pct is not none else "—" }}</dd>{% endif %}
     <dt>Equipment</dt><dd>{{ (b.equipment.tag ~ " · " ~ b.equipment.name) if b.equipment else "—" }}</dd>
+    <dt>Started / finished</dt><dd>{{ b.started_at|dt }} / {{ b.finished_at|dt }}</dd>
     <dt>Entered by</dt><dd>{{ b.created_by.display if b.created_by else "—" }} <span class="muted small">· {{ b.created_at|dt }}</span></dd>
     <dt>Decision</dt><dd>{{ dec_chip(b.decision) }}{% if b.decision_by %} <span class="muted small">by {{ b.decision_by.display }} · {{ b.decision_at|dt }}</span>{% endif %}</dd>
     {% if b.qc_test %}<dt>QC test of output</dt><dd><a class="mono" href="/qc/{{ b.qc_test.id }}">{{ b.qc_test.test_no }}</a> {{ res_chip(b.qc_test.overall) }}</dd>{% endif %}
@@ -48,4 +49,5 @@
   {% if used %}<ul class="alist">{% for it in used %}<li><a href="/packs/{{ it.pack.id }}"><span class="mono">{{ it.pack.pack_no }}</span><span class="t">{{ it.pack.kind }} · {{ it.actual|num }} {{ it.unit }}</span><span class="d">{{ it.pack.pack_date|d }}</span></a></li>{% endfor %}</ul>
   {% else %}<p class="muted" style="margin:0">Not packed yet.</p>{% endif %}
 </div>
+{% include "_sensor_summary.html" %}
 {% endblock %}

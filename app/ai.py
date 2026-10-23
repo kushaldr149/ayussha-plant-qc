@@ -39,7 +39,8 @@ dispatched or used at site.
 9. Site mixing: per mix the water, water/binder ratio (state its basis as given in the data), mixing time, slump or \
 flow, temperatures and admixture doses; mixes with flagged bags; mixes with no cube sample; values not entered. \
 There are no limits for these in the data, so do not judge them against any limit.
-10. Strength tests: results below the acceptance values entered for the grade, and samples with no acceptance values.
+10. Strength and durability tests: results below the acceptance values entered for the grade, samples with no \
+acceptance values, and durability results that do not meet their target (with the target source) or have no target.
 11. NCRs: open and overdue NCRs, and repeated sources.
 12. Sensors: readings outside the limits set for each sensor, grouped by sensor, with the limit and its source.
 13. Data gaps: tests with values not entered, production records or bags without planned values or lot numbers.

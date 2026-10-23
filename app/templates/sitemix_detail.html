@@ -40,4 +40,5 @@
       <td class="small">{% for it in a.pack.items %}{{ it.material_name }} (lot {{ it.lot_no or "—" }}){% endfor %}</td><td class="num mono">{{ a.dose|num }} {{ a.unit }}</td></tr>{% endfor %}
   </tbody></table></div>{% else %}<p class="muted" style="margin:0">None recorded.</p>{% endif %}
 </div>
+{% include "_sensor_summary.html" %}
 {% endblock %}

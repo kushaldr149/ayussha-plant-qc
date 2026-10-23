@@ -5,6 +5,7 @@
 <p class="muted">{% if can("setup.write") %}Materials, test limits and recipes come from your own specifications. Every test and production record is checked against what is entered here.{% else %}Only administrators can change setup. Every test and production record is checked against these values.{% endif %}</p></div></div>
 
 <div class="panel"><div class="panel-head" style="margin:0"><div><h2>Customers, vehicles and concrete grades</h2><p class="muted small" style="margin:4px 0 0">Used by orders, dispatch and strength tests.</p></div><a class="btn" href="/setup/masters">Open</a></div></div>
+{% if can("setup.write") %}<div class="panel"><div class="panel-head" style="margin:0"><div><h2>Durability targets</h2><p class="muted small" style="margin:4px 0 0">Acceptance values for RCPT, chloride migration, water penetration and other durability tests, by product line.</p></div><a class="btn" href="/setup/durability-targets">Open</a></div></div>{% endif %}
 
 <div class="panel" id="settings">
   <div class="panel-head"><h2>Plant settings</h2>{% if can("setup.write") %}<a class="btn" href="/setup/settings">Edit settings</a>{% endif %}</div>

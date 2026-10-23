@@ -31,6 +31,6 @@
 </div>
 <div class="panel">
   <h2>Sending readings from the plant system</h2>
-  <p class="small" style="margin:6px 0 0">The plant API must be switched on (PLANT_API_TOKEN in the .env file). A PLC, gateway or data logger then sends <span class="mono">POST /api/v1/sensor-readings</span> with the header <span class="mono">Authorization: Bearer &lt;token&gt;</span> and a body such as <span class="mono">{"readings": [{"tag": "AG-MW-01", "value": 4.2}]}</span>. Readings are checked against each sensor's limits when saved. Field details are on <a href="/api/docs" target="_blank" rel="noopener">/api/docs</a>.</p>
+  <p class="small" style="margin:6px 0 0">The plant API must be switched on (PLANT_API_TOKEN in the .env file). A PLC, gateway or data logger then sends <span class="mono">POST /api/v1/sensor-readings</span> with the header <span class="mono">Authorization: Bearer &lt;token&gt;</span> and a body such as <span class="mono">{"readings": [{"tag": "AG-MW-01", "value": 4.2}]}</span>. Add <span class="mono">"ref": "CB-20261022-001"</span> to attach a reading to a coating or grinding batch, bag or site mix; readings without it are matched to batches and site mixes by their start and finish times. Readings are checked against each sensor's limits when saved. Field details are on <a href="/api/docs" target="_blank" rel="noopener">/api/docs</a>.</p>
 </div>
 {% endblock %}

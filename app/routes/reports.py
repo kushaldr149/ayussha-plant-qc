@@ -257,3 +257,12 @@ def equipment_xlsx(db: Session = Depends(get_db), user: User = Depends(require("
                                              "Interval days", "Status", "Last calibrated", "Result", "Certificate no.",
                                              "Agency", "Next due"], rows, (9, 13))
     return _file(data, XLSX, f"equipment-calibration-{config.local_today().isoformat()}.xlsx")
+
+
+@router.get("/reports/site-mix-dataset.xlsx")
+def site_mix_dataset(request: Request, db: Session = Depends(get_db), user: User = Depends(require("reports"))):
+    from .. import dataset
+    params = dict(request.query_params)
+    start, end = parse_period(params.get("from"), params.get("to"))
+    cols, rows, notes = dataset.build(db, start, end)
+    return _file(dataset.to_excel(cols, rows, notes), XLSX, f"site-mix-dataset-{start}-to-{end}.xlsx")

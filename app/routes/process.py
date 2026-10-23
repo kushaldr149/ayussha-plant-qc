@@ -83,7 +83,7 @@ async def batch_create(kind: str, request: Request, db: Session = Depends(get_db
         raise HTTPException(404, "Not found.")
     raw = await request.form()
     form = {k: raw.get(k, "") for k in ("batch_date", "shift", "equipment_id", "output_material_id", "output_qty",
-                                         "output_unit", "blaine", "residue45", "remarks")}
+                                         "output_unit", "blaine", "residue45", "remarks", "started_at", "finished_at")}
     form["inputs"] = indexed_rows(raw, "in", ["role", "lot", "qty", "unit"])
     try:
         b = process.save_process_batch(db, user, kind, form)
@@ -105,7 +105,9 @@ def _batch_ctx(db: Session, b: ProcessBatch) -> dict:
     tests = db.scalars(select(QCTest).where(QCTest.material_id == b.output_material_id)
                        .order_by(QCTest.test_date.desc()).limit(50)).all()
     used = db.scalars(select(PackItem).where(PackItem.batch_id == b.id).options(selectinload(PackItem.pack))).all()
-    return {"b": b, "tests": tests, "used": used, "roles": process.ROLE_LABELS, "PROCESS_KINDS": PROCESS_KINDS}
+    from .. import sensors as sn
+    return {"b": b, "tests": tests, "used": used, "roles": process.ROLE_LABELS, "PROCESS_KINDS": PROCESS_KINDS,
+            "sensor_rows": sn.readings_for(db, b.batch_no, b.kind, b.started_at, b.finished_at)}
 
 
 @router.get("/process/batches/{bid}")
@@ -325,4 +327,6 @@ def mix_detail(mid: int, request: Request, db: Session = Depends(get_db), user: 
         selectinload(SiteMix.packs).selectinload(Pack.items), selectinload(SiteMix.admixtures))).first()
     if not mix:
         raise HTTPException(404, "This record does not exist.")
-    return render(request, db, user, "sitemix_detail.html", mix=mix, s=process.mix_summary(mix))
+    from .. import sensors as sn
+    return render(request, db, user, "sitemix_detail.html", mix=mix, s=process.mix_summary(mix),
+                  sensor_rows=sn.readings_for(db, mix.mix_no, "sitemix", mix.started_at, mix.finished_at))

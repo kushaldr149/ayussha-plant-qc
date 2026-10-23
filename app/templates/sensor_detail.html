@@ -13,6 +13,7 @@
   <div class="fgrid">
     <label class="f"><span>Reading{% if s.unit %} ({{ s.unit }}){% endif %}</span><input name="value" id="r_value" inputmode="decimal" class="mono" required value="{{ rform.get('value', '') }}"></label>
     <label class="f"><span>Time</span><input type="datetime-local" name="taken_at" id="r_time" value="{{ rform.get('taken_at', '') }}"><span class="hint">Leave empty for now.</span></label>
+    <label class="f"><span>Batch, bag or site mix no. (optional)</span><input name="ref" id="r_ref" class="mono" value="{{ rform.get('ref', '') }}" placeholder="e.g. CB-20261022-001"><span class="hint">Attaches the reading to that record.</span></label>
     <label class="f wide"><span>Note</span><input name="note" id="r_note" value="{{ rform.get('note', '') }}" maxlength="300"></label>
   </div>
   <div class="actions"><button class="btn primary" type="submit">Save reading</button></div>
@@ -22,11 +23,11 @@
 <div class="panel">
   <h2>Readings <span class="muted small">(latest 200)</span></h2>
   <div class="tablewrap" style="margin-top:8px"><table class="data">
-    <thead><tr><th>Time</th><th class="num">Value</th><th>Result</th><th>Source</th><th>Entered by</th><th>Note</th></tr></thead>
+    <thead><tr><th>Time</th><th class="num">Value</th><th>Result</th><th>Record</th><th>Source</th><th>Entered by</th><th>Note</th></tr></thead>
     <tbody>{% for r in readings %}
-      <tr><td class="nowrap">{{ r.taken_at|dt }}</td><td class="num mono">{{ r.value|num }} {{ s.unit }}</td><td>{{ rchip(r.result) }}</td>
+      <tr><td class="nowrap">{{ r.taken_at|dt }}</td><td class="num mono">{{ r.value|num }} {{ s.unit }}</td><td>{{ rchip(r.result) }}</td><td class="mono small">{{ r.ref or "—" }}</td>
         <td>{{ "Plant API" if r.source == "api" else "By hand" }}</td><td>{{ r.entered_by.display if r.entered_by else "—" }}</td><td class="small">{{ r.note or "" }}</td></tr>
-    {% else %}<tr><td colspan="6" class="empty">No readings yet.</td></tr>{% endfor %}</tbody>
+    {% else %}<tr><td colspan="7" class="empty">No readings yet.</td></tr>{% endfor %}</tbody>
   </table></div>
 </div>
 

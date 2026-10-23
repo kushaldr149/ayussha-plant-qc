@@ -31,6 +31,11 @@
     <a class="btn primary" href="/reports/strength.xlsx?from={{ start.isoformat() }}&amp;to={{ end.isoformat() }}">Download Excel ({{ start|d }} to {{ end|d }})</a>
   </div>
   <div class="panel">
+    <h2>Site mix dataset (one row per site mix)</h2>
+    <p class="muted">The full chain for each site mix in one row: product and grade, mix design, bag contents and lots, raw-material lot test results, coating and grinding batch values, admixture doses, site mixing values, sensor readings, strength by age and durability results. A second sheet says where each column comes from.</p>
+    <a class="btn primary" href="/reports/site-mix-dataset.xlsx?from={{ start.isoformat() }}&amp;to={{ end.isoformat() }}">Download Excel ({{ start|d }} to {{ end|d }})</a>
+  </div>
+  <div class="panel">
     <h2>NCR register</h2>
     <p class="muted">NCRs raised in the period with containment, root cause, corrective action, owner and status.</p>
     <a class="btn primary" href="/reports/ncr.xlsx?from={{ start.isoformat() }}&amp;to={{ end.isoformat() }}">Download Excel ({{ start|d }} to {{ end|d }})</a>

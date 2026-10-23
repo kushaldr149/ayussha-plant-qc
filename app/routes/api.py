@@ -50,6 +50,7 @@ class SensorReadingIn(BaseModel):
     value: float
     taken_at: str = Field(default="", description="ISO date-time in plant time, e.g. 2026-10-22T14:05:00; empty = now")
     note: str = ""
+    ref: str = Field(default="", description="Optional coating/grinding batch no., bag no. or site mix no. this reading belongs to")
 
 
 class SensorReadingsIn(BaseModel):
@@ -97,7 +98,8 @@ def post_sensor_readings(body: SensorReadingsIn, db: Session = Depends(get_db)):
             errors.append(f"Reading {i}: no sensor with tag {r.tag}.")
             continue
         try:
-            saved.append((s, sn.add_reading(db, None, s, r.value, r.taken_at, r.note, source="api", commit=False)))
+            saved.append((s, sn.add_reading(db, None, s, r.value, r.taken_at, r.note, source="api", commit=False,
+                                                ref=r.ref)))
         except services.ValidationError as e:
             errors += [f"Reading {i} ({r.tag}): {m}" for m in e.messages]
     if errors:

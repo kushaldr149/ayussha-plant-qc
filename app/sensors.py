@@ -85,9 +85,19 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _ref_exists(db: Session, ref: str) -> bool:
+    from .models import Pack, ProcessBatch, SiteMix
+    return bool(db.scalars(select(ProcessBatch.id).where(ProcessBatch.batch_no == ref)).first()
+                or db.scalars(select(Pack.id).where(Pack.pack_no == ref)).first()
+                or db.scalars(select(SiteMix.id).where(SiteMix.mix_no == ref)).first())
+
+
 def add_reading(db: Session, user: User | None, s: Sensor, value, taken_at=None, note: str = "",
-                source: str = "manual", commit: bool = True) -> SensorReading:
+                source: str = "manual", commit: bool = True, ref: str = "") -> SensorReading:
     errors: list[str] = []
+    ref = str(ref or "").strip().upper()
+    if ref and not _ref_exists(db, ref):
+        errors.append(f"No coating/grinding batch, bag or site mix with number {ref}.")
     v = parse_num(value, "Reading", errors)
     if v is None and not errors:
         errors.append("Enter the reading.")
@@ -99,7 +109,8 @@ def add_reading(db: Session, user: User | None, s: Sensor, value, taken_at=None,
     if errors:
         raise ValidationError(errors)
     r = SensorReading(sensor_id=s.id, taken_at=when, value=v, result=check(v, s.low_limit, s.high_limit),
-                      source=source, note=str(note or "").strip()[:300], entered_by_id=user.id if user else None)
+                      source=source, note=str(note or "").strip()[:300], entered_by_id=user.id if user else None,
+                      ref=ref or None)
     db.add(r)
     if commit:
         db.flush()
@@ -141,3 +152,30 @@ def review_data(db: Session, date_from, date_to, limit: int) -> dict:
          "time_utc": r.taken_at.isoformat(timespec="minutes"), "value": r.value, "low_limit": s.low_limit,
          "high_limit": s.high_limit, "limit_source": s.limit_source, "result": RESULT_LABELS[r.result]}
         for r, s in rows]}
+
+
+# ---------------------------------------------------------------- readings that belong to a batch or site mix
+
+STAGE_FOR = {"coating": "Coating (coarse aggregate)", "grinding": "Grinding (cementitious)",
+             "sitemix": "Mixer on wheels and site mixing"}
+
+
+def readings_for(db: Session, ref: str, kind: str, start: datetime | None, end: datetime | None) -> list[dict]:
+    """Per-sensor summary of readings that belong to a record: readings sent with its number, plus readings
+    without a number from sensors at the record's plant stage taken between its start and finish times."""
+    cond = SensorReading.ref == ref
+    if start and end:
+        cond = cond | ((SensorReading.ref.is_(None)) & (Sensor.stage == STAGE_FOR.get(kind, "")) &
+                       (SensorReading.taken_at >= start) & (SensorReading.taken_at <= end))
+    rows = db.execute(select(SensorReading, Sensor).join(Sensor, Sensor.id == SensorReading.sensor_id).where(cond)
+                      .order_by(Sensor.tag, SensorReading.taken_at)).all()
+    out: dict[int, dict] = {}
+    for r, s in rows:
+        d = out.setdefault(s.id, {"sensor": s, "values": [], "outside": 0, "by_ref": 0, "by_time": 0})
+        d["values"].append(r.value)
+        d["outside"] += r.result in ("low", "high")
+        d["by_ref" if r.ref == ref else "by_time"] += 1
+    for d in out.values():
+        v = d.pop("values")
+        d.update(n=len(v), min=min(v), max=max(v), mean=sum(v) / len(v))
+    return list(out.values())

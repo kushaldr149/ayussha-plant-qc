@@ -763,6 +763,11 @@ def calibration_due(db: Session, today: date, ahead_days: int = 30) -> list[Equi
 
 # ================================================================ AI review data
 
+def _dura(db: Session, sample_id: int) -> list:
+    from .durability import results_for
+    return results_for(db, sample_id)
+
+
 def review_extra(db: Session, date_from: date, date_to: date, limit: int) -> dict:
     """Dispatch, strength and NCR records for the AI review (added to the QC and production data)."""
     dispatches = db.scalars(select(Dispatch).where(Dispatch.dispatch_date >= date_from, Dispatch.dispatch_date <= date_to)
@@ -784,7 +789,11 @@ def review_extra(db: Session, date_from: date, date_to: date, limit: int) -> dic
             "ages": [{"age_days": g["age"], "results_mpa": [r.strength_mpa for r in g["results"]],
                       "mean_mpa": round(g["mean"], 2) if g["mean"] is not None else None, "check": g["status"]}
                      for g in sm["groups"]],
-            "overall": sm["status"]})
+            "overall": sm["status"],
+            "durability": [{"test": d.test_name, "method": d.method, "age_days": d.age_days, "mean": d.mean_value,
+                            "unit": d.unit, "target_min": d.target_min, "target_max": d.target_max,
+                            "target_source": d.target_source, "check": d.result}
+                           for d in _dura(db, s.id)]})
     return {
         "dispatches": [{"dispatch_no": d.dispatch_no, "date": d.dispatch_date.isoformat(), "order_no": d.order.order_no,
                         "customer": d.order.customer.name, "status": d.status, "remarks": d.remarks,

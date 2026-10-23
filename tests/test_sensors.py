@@ -22,7 +22,7 @@ def test_check():
 
 def test_sensor_register_and_readings(admin, client):
     page = admin.get("/sensors").text
-    assert "No sensors yet" in page and all(t in page for t in SENSOR_TYPES if t != "Other")
+    assert all(t in page for t in SENSOR_TYPES if t != "Other")
     assert "Photoelectric (presence / count)" in admin.get("/sensors/new?sensor_type=Photoelectric+%28presence+%2F+count%29").text
     # limits need a source; stage and type are required
     admin.get("/sensors/new")

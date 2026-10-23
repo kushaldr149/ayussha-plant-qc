@@ -111,7 +111,7 @@ def _new_id(r, path):
     return int(m.group(1))
 
 
-def test_plant_flow(admin):
+def test_plant_flow(admin, client):
     mats, lots, oid, oid2 = _setup_data()
 
     # ---- coating: 1000 kg of 20 mm coated with 20 kg microsilica
@@ -268,6 +268,88 @@ def test_plant_flow(admin):
         assert s["binder_kg"] == 400 and s["aggregate_kg"] == 1605 and s["wb"] == 0.4
     page = admin.get(f"/site-mix/{mix_id}").text
     assert "0.400" in page and "LSP" in page
+
+    # ---- product line, sensors attached to records, strength + durability, and the one-row dataset
+    import io as _io
+    from datetime import timedelta as _td
+    from openpyxl import load_workbook
+    from app.models import CubeResult, CubeSample
+    H = {"Authorization": "Bearer test-token-123"}
+    with SessionLocal() as db:
+        mix = db.get(SiteMix, mix_id)
+        mix_no = mix.mix_no
+        order = mix.dispatch.order
+        order.recipe.product_line = "Vikram 2 M120"
+        cs = CubeSample(sample_no="CS-DS-1", dispatch_id=mix.dispatch_id, cast_date=date.today() - _td(days=28),
+                        test_ages="28", specimens_per_age=2)
+        db.add(cs)
+        db.flush()
+        mix.cube_sample_id = cs.id
+        db.add_all([CubeResult(sample_id=cs.id, age_days=28, test_date=date.today(), strength_mpa=150.0),
+                    CubeResult(sample_id=cs.id, age_days=28, test_date=date.today(), strength_mpa=154.0)])
+        db.commit()
+        cs_id = cs.id
+        coat_no = db.get(ProcessBatch, coat_id).batch_no
+    admin.get("/sensors/new")
+    admin.post("/sensors/new", {"tag": "SM-TMP-01", "name": "Mixer concrete temperature", "unit": "°C",
+                                "stage": "Mixer on wheels and site mixing", "sensor_type": "Temperature"})
+    admin.post("/sensors/new", {"tag": "CB-PWR-01", "name": "Coating mixer power", "unit": "kW",
+                                "stage": "Coating (coarse aggregate)", "sensor_type": "Motor current / power"})
+    r = client.post("/api/v1/sensor-readings", headers=H, json={"readings": [
+        {"tag": "SM-TMP-01", "value": 28, "ref": mix_no}, {"tag": "SM-TMP-01", "value": 30, "ref": mix_no.lower()},
+        {"tag": "CB-PWR-01", "value": 11, "ref": coat_no}]})
+    assert r.status_code == 200, r.text
+    r = client.post("/api/v1/sensor-readings", headers=H, json={"readings": [{"tag": "SM-TMP-01", "value": 1, "ref": "SM-NOPE"}]})
+    assert r.status_code == 422 and "No coating/grinding batch, bag or site mix" in r.text
+    page = admin.get(f"/site-mix/{mix_id}").text
+    assert "SM-TMP-01" in page and "2 sent with this number" in page
+    assert "CB-PWR-01" in admin.get(f"/process/batches/{coat_id}").text
+
+    # durability: target for all product lines, then results
+    admin.get("/setup/durability-targets")
+    r = admin.post("/setup/durability-targets", {"test_type": "rcpt", "max_value": "150"})
+    assert r.status_code == 400 and "Enter the source" in r.text
+    r = admin.post("/setup/durability-targets", {"test_type": "rcpt", "max_value": "150", "source": "Test document"})
+    assert r.status_code == 303
+    r = admin.post("/setup/durability-targets", {"test_type": "rcpt", "max_value": "100", "source": "Again"})
+    assert r.status_code == 400 and "already exists" in r.text
+    admin.get(f"/strength/{cs_id}")
+    r = admin.post(f"/strength/{cs_id}/durability", {"test_type": "rcpt", "age_days": "28", "test_date": TODAY,
+                                                      "values": "120, 140", "lab": "In-house"})
+    assert r.status_code == 303
+    r = admin.post(f"/strength/{cs_id}/durability", {"test_type": "nt492", "test_date": TODAY, "values": "x"})
+    assert r.status_code == 400 and "must be a number" in r.text
+    page = admin.get(f"/strength/{cs_id}").text
+    assert "Rapid chloride permeability" in page and "Meets target" in page and "Vikram 2 M120" in page
+
+    r = admin.get("/reports/site-mix-dataset.xlsx?from=2000-01-01&to=2100-01-01")
+    assert r.status_code == 200
+    wb = load_workbook(_io.BytesIO(r.content))
+    ws = wb["Site mixes"]
+    head = [c.value for c in ws[1]]
+    row = next(dict(zip(head, [c.value for c in rr])) for rr in ws.iter_rows(min_row=2) if rr[0].value == mix_no)
+    assert row["Product"] == "Vikram 2" and row["Grade"] == "M120" and row["Water/binder"] == 0.4
+    assert row["Site sensor · SM-TMP-01 · mean (°C)"] == 29 and row["Site sensor · SM-TMP-01 · outside limits"] == 0
+    assert row["Strength · 28 d · mean MPa"] == 152 and row["Strength · 28 d · specimens"] == 2
+    assert row["Durability · Rapid chloride permeability (charge passed) · mean (coulombs)"] == 130
+    assert row["Durability · Rapid chloride permeability (charge passed) · check"] == "Meets target"
+    assert any(h.startswith("Qty · ") for h in head) and any(h.startswith("Lots · ") for h in head)
+    assert [c.value for c in wb["Column notes"][1]] == ["Column", "Source"]
+    assert row.get("Batch sensor · coating · CB-PWR-01 · mean (kW)") == 11, [h for h in head if "sensor" in h]
+    # readings without a number are matched by the batch's start and finish times
+    from datetime import datetime as _dt
+    from app import sensors as _sn
+    from app.models import Sensor as _S, SensorReading as _R
+    with SessionLocal() as db:
+        b = db.get(ProcessBatch, coat_id)
+        b.started_at, b.finished_at = _dt(2026, 1, 5, 8, 0), _dt(2026, 1, 5, 9, 0)
+        sid = db.scalars(select(_S.id).where(_S.tag == "CB-PWR-01")).one()
+        db.add_all([_R(sensor_id=sid, taken_at=_dt(2026, 1, 5, 8, 30), value=13, result="nolimit"),
+                    _R(sensor_id=sid, taken_at=_dt(2026, 1, 5, 10, 0), value=99, result="nolimit")])
+        db.commit()
+        rows = _sn.readings_for(db, b.batch_no, "coating", b.started_at, b.finished_at)
+        d = next(x for x in rows if x["sensor"].tag == "CB-PWR-01")
+        assert (d["n"], d["by_ref"], d["by_time"], d["mean"]) == (2, 1, 1, 12)
 
     # ---- cancelling a dispatch puts its bags back in the plant
     admin.get("/dispatch/new")

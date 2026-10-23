@@ -125,6 +125,10 @@ def save_process_batch(db: Session, user: User, kind: str, form) -> ProcessBatch
     blaine = parse_num(form.get("blaine"), "Blaine fineness", errors) if kind == "grinding" else None
     residue = parse_num(form.get("residue45"), "Residue on 45 µm", errors) if kind == "grinding" else None
     remarks = _s(form, "remarks")
+    started = _parse_dt(form.get("started_at"), "Start time", errors)
+    finished = _parse_dt(form.get("finished_at"), "Finish time", errors)
+    if started and finished and finished < started:
+        errors.append("Finish time is before the start time.")
 
     rows = []
     for i, it in enumerate(form.get("inputs") or [], start=1):
@@ -184,6 +188,7 @@ def save_process_batch(db: Session, user: User, kind: str, form) -> ProcessBatch
                      output_material_id=out_mat.id, output_material_name=out_mat.name, output_qty=out_qty,
                      output_unit=out_unit, coating_pct=coating_pct, blaine_m2kg=blaine, residue45_pct=residue,
                      coating_target_pct=target, coating_dev_pct=dev, coating_tol_pct=tol, coating_status=cstatus,
+                     started_at=started, finished_at=finished,
                      lot_issue=lot_issue, decision="On hold", remarks=remarks, created_by_id=user.id,
                      inputs=[ProcessInput(role=r[0], material_id=r[1].id, material_name=r[1].name, lot_no=r[2],
                                           lot_decision=r[3], lot_test_id=r[4], qty=r[5], unit=r[6]) for r in rows])

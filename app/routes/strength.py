@@ -18,6 +18,15 @@ from ..web import flash, indexed_rows, redirect, render
 router = APIRouter(prefix="/strength", dependencies=[Depends(check_csrf)])
 
 
+def _dctx(db: Session, s: CubeSample, dform=None) -> dict:
+    from .. import durability as du
+    from ..models import DURABILITY_TESTS
+    line = du.product_line_of(s)
+    targets = {k: du.target_for(db, k, line) for k in DURABILITY_TESTS if k != "other"}
+    return {"dura": du.results_for(db, s.id), "DTESTS": DURABILITY_TESTS, "dlabels": du.RESULT_LABELS,
+            "dtargets": targets, "dline": line, "dform": dform or {}}
+
+
 @router.get("")
 def strength_list(request: Request, db: Session = Depends(get_db), user: User = Depends(require("view"))):
     f = dict(request.query_params)
@@ -101,7 +110,7 @@ def sample_detail(sid: int, request: Request, db: Session = Depends(get_db), use
     summary = ops.sample_summary(s)
     next_age = next((g["age"] for g in summary["groups"] if not g["results"]), "")
     return render(request, db, user, "strength_detail.html", s=s, summary=summary, ncrs=ncrs, form={"age_days": next_age},
-                  rows=[{}] * (s.specimens_per_age or 3))
+                  rows=[{}] * (s.specimens_per_age or 3), **_dctx(db, s))
 
 
 @router.post("/{sid}/results")
@@ -115,9 +124,28 @@ async def sample_results(sid: int, request: Request, db: Session = Depends(get_d
     except ValidationError as e:
         ncrs = db.scalars(select(NCR).where(NCR.cube_sample_id == s.id)).all()
         return render(request, db, user, "strength_detail.html", status_code=400, s=s, summary=ops.sample_summary(s),
-                      ncrs=ncrs, form=form, rows=form["rows"] or [{}], errors=e.messages)
+                      ncrs=ncrs, form=form, rows=form["rows"] or [{}], errors=e.messages, **_dctx(db, s))
     flash(request, "Results saved.")
     return redirect(f"/strength/{s.id}")
+
+
+@router.post("/{sid}/durability")
+async def sample_durability(sid: int, request: Request, db: Session = Depends(get_db),
+                            user: User = Depends(require("strength.write"))):
+    from .. import durability as du
+    s = _get(db, sid)
+    form = await request.form()
+    try:
+        r = du.add_result(db, user, s, form)
+    except ValidationError as e:
+        db.rollback()
+        s = _get(db, sid)
+        ncrs = db.scalars(select(NCR).where(NCR.cube_sample_id == s.id)).all()
+        return render(request, db, user, "strength_detail.html", status_code=400, s=s, summary=ops.sample_summary(s),
+                      ncrs=ncrs, form={}, rows=[{}] * (s.specimens_per_age or 3), errors=e.messages, **_dctx(db, s, form))
+    flash(request, f"{r.test_name}: mean {r.mean_value:g} {r.unit}, {du.RESULT_LABELS[r.result].lower()}.",
+          "warn" if r.result == "fail" else "ok")
+    return redirect(f"/strength/{s.id}#durability")
 
 
 @router.post("/{sid}/results/{rid}/delete")

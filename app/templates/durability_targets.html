@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Durability targets{% endblock %}
+{% block content %}
+{% set v = form or {} %}
+<div class="toolbar"><div><p class="muted" style="margin:0"><a href="/setup">Setup</a></p><h1>Durability targets</h1>
+<p class="muted">Acceptance values for durability tests on strength samples. A target for one product line is used before a target for all product lines. Enter only values from your specification, a standard or an in-house document, and name the source.</p></div></div>
+<div class="tablewrap"><table class="data">
+  <thead><tr><th>Test</th><th>Method</th><th>Product line</th><th>Target</th><th>Source</th><th></th></tr></thead>
+  <tbody>{% for t in rows %}{% set name, unit, method = tests.get(t.test_type, (t.test_type, "", "")) %}
+    <tr><td>{{ name }}</td><td class="small">{{ method }}</td><td>{{ t.product_line or "All product lines" }}</td>
+      <td class="mono">{{ limit_text(t.min_value, t.max_value, unit) }}</td><td class="small">{{ t.source }}</td>
+      <td><form class="inline" method="post" action="/setup/durability-targets/{{ t.id }}/delete" data-confirm><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="linkbtn" type="submit" data-label="Delete">Delete</button><span data-note></span></form></td></tr>
+  {% else %}<tr><td colspan="6" class="empty">No targets yet. Durability results are recorded without a check until a target exists.</td></tr>{% endfor %}</tbody>
+</table></div>
+<form class="panel stack" method="post" action="/setup/durability-targets" style="max-width:900px">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <h2 style="margin:0">Add a target</h2>
+  <div class="fgrid">
+    <label class="f"><span>Test</span><select name="test_type" id="t_type"><option value="">— Select —</option>{% for k, (name, unit, method) in tests.items() if k != "other" %}<option value="{{ k }}" {% if v.get('test_type') == k %}selected{% endif %}>{{ name }} ({{ unit }}) · {{ method }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Product line</span><select name="product_line" id="t_line"><option value="">All product lines</option>{% for l in lines %}<option {% if v.get('product_line') == l %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+    <label class="f"><span>Minimum</span><input name="min_value" id="t_min" inputmode="decimal" class="mono" value="{{ v.get('min_value', '') }}"></label>
+    <label class="f"><span>Maximum</span><input name="max_value" id="t_max" inputmode="decimal" class="mono" value="{{ v.get('max_value', '') }}"></label>
+    <label class="f wide"><span>Source</span><input name="source" id="t_src" value="{{ v.get('source', '') }}" placeholder="Specification, standard and clause, or in-house document"></label>
+  </div>
+  <div class="actions"><button class="btn primary" type="submit">Save target</button></div>
+</form>
+{% endblock %}

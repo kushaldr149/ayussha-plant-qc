@@ -619,6 +619,8 @@ class ProcessBatch(Base):
     coating_dev_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     coating_tol_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     coating_status: Mapped[str | None] = mapped_column(String(20), nullable=True)   # ok / over / notol / notarget
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)    # UTC; used to match sensor readings
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     lot_issue: Mapped[bool] = mapped_column(Boolean, default=False)
     decision: Mapped[str] = mapped_column(String(30), default="On hold", index=True)
     decision_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -817,8 +819,62 @@ class SensorReading(Base):
     result: Mapped[str] = mapped_column(String(10))                     # ok / low / high / nolimit
     source: Mapped[str] = mapped_column(String(20), default="manual")   # manual / api
     note: Mapped[str] = mapped_column(String(300), default="")
+    # Optional: the coating/grinding batch, bag or site mix this reading belongs to (batch_no / pack_no / mix_no).
+    ref: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     entered_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     sensor: Mapped[Sensor] = relationship(back_populates="readings")
     entered_by: Mapped[User | None] = relationship()
+
+
+# ---------------------------------------------------------------- durability tests
+
+# key -> (name, unit, test method). Methods named are the published test methods for these properties.
+DURABILITY_TESTS = {
+    "rcpt": ("Rapid chloride permeability (charge passed)", "coulombs", "ASTM C1202"),
+    "nt492": ("Chloride migration coefficient", "×10⁻¹² m²/s", "NT BUILD 492"),
+    "wpd": ("Water penetration depth under pressure", "mm", "EN 12390-8"),
+    "sorptivity": ("Sorptivity (initial rate of absorption)", "mm/√s", "ASTM C1585"),
+    "absorption": ("Water absorption after immersion", "%", "ASTM C642"),
+    "voids": ("Volume of permeable voids", "%", "ASTM C642"),
+    "flexural": ("Flexural strength", "MPa", "As per your test method"),
+    "other": ("Other durability test", "", "As entered"),
+}
+
+
+class DurabilityTarget(Base):
+    """Acceptance value for a durability test, optionally for one product line ("" = all product lines)."""
+    __tablename__ = "durability_targets"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    test_type: Mapped[str] = mapped_column(String(20), index=True)
+    product_line: Mapped[str] = mapped_column(String(120), default="")
+    min_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str] = mapped_column(String(240), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class DurabilityResult(Base):
+    __tablename__ = "durability_results"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sample_id: Mapped[int] = mapped_column(ForeignKey("cube_samples.id", ondelete="CASCADE"), index=True)
+    test_type: Mapped[str] = mapped_column(String(20))
+    test_name: Mapped[str] = mapped_column(String(160))
+    unit: Mapped[str] = mapped_column(String(30), default="")
+    method: Mapped[str] = mapped_column(String(120), default="")
+    age_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    test_date: Mapped[date] = mapped_column(Date)
+    values_text: Mapped[str] = mapped_column(String(200))          # individual specimen values as entered
+    mean_value: Mapped[float] = mapped_column(Float)
+    target_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_source: Mapped[str] = mapped_column(String(240), default="")
+    result: Mapped[str] = mapped_column(String(10))                 # pass / fail / notarget
+    lab: Mapped[str] = mapped_column(String(160), default="")
+    remarks: Mapped[str] = mapped_column(Text, default="")
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    sample: Mapped[CubeSample] = relationship()
+    created_by: Mapped[User | None] = relationship()
